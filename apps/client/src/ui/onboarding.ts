@@ -69,7 +69,11 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
     root.querySelector('#play')?.addEventListener('click', nameStep);
     root.querySelector('#new')?.addEventListener('click', () => { clearProfile(); store.profile = null; nameStep(); });
     root.querySelector('#cont')?.addEventListener('click', () => finish(p!));
-    root.querySelector('#social')!.addEventListener('click', () => { const s = root.querySelector('#soon') as HTMLElement; s.hidden = false; s.classList.remove('pop'); void s.offsetWidth; s.classList.add('pop'); });
+    let soonTimer = 0;
+    root.querySelector('#social')!.addEventListener('click', () => {
+      const s = root.querySelector('#soon') as HTMLElement; s.hidden = false; s.classList.remove('pop'); void s.offsetWidth; s.classList.add('pop');
+      window.clearTimeout(soonTimer); soonTimer = window.setTimeout(() => { if (s.isConnected) s.hidden = true; }, 2500);
+    });
   };
 
   // ---------------------------------------------------------------- 1. name

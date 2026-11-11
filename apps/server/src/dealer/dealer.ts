@@ -37,6 +37,14 @@ export class Dealer {
   status: DealerStatus = { running: false, commitsAvailable: 0, pendingBets: 0, oldestPendingAgeS: 0, cursor: 1, inflight: 0 };
   private timer: NodeJS.Timeout | null = null;
   private scanning = false;
+  /** RPC budget: scan every 0.4 s while bets are moving, every 2 s when the floor is idle (the provider rate-limits) */
+  private hotUntil = 0;
+  private lastScan = 0;
+  private lastTipAt = 0;
+  /** a bet was just relayed: scan at full speed for a while (it lands on chain within a couple of blocks) */
+  nudge() { this.hotUntil = Date.now() + 20_000; }
+  /** the relayer just saw a bet execute: scan now instead of on the next 0.4 s tick */
+  scanNow() { this.nudge(); void this.tick(); }
   private refilling = false;
   private inflight = new Map<number, number>();
   private seenAt = new Map<number, number>();
@@ -67,6 +75,10 @@ export class Dealer {
 
   async tick() {
     if (this.scanning || !this.status.running) return;
+    const now = Date.now();
+    const busy = now < this.hotUntil || this.status.pendingBets > 0 || this.inflight.size > 0;
+    if (!busy && now - this.lastScan < 2_000) return;
+    this.lastScan = now;
     this.scanning = true;
     try {
       const pools = await this.rpc.view('get_pools', {}, 'optimistic');
@@ -77,8 +89,12 @@ export class Dealer {
         void this.refill(BigInt(pools.commit_tail ?? 0)).finally(() => { this.refilling = false; });
       }
       await this.kick(BigInt(pools.next_bet_id ?? 1));
-      const tip = await this.rpc.tip();
-      this.status.oldestPendingAgeS = this.oldestHeight ? Math.max(0, Number(tip.height) - this.oldestHeight) : 0;
+      // the tip only feeds the health report: every 5 s is plenty
+      if (now - this.lastTipAt > 5_000) {
+        this.lastTipAt = now;
+        const tip = await this.rpc.tip();
+        this.status.oldestPendingAgeS = this.oldestHeight ? Math.max(0, Number(tip.height) - this.oldestHeight) : 0;
+      }
       this.status.inflight = this.inflight.size;
     } catch (err) {
       console.error(JSON.stringify({ at: 'dealer', error: err instanceof Error ? err.message : String(err) }));
@@ -175,6 +191,8 @@ export class Dealer {
       }
       const code = panicCode(sent.tx);
       if (!txSucceeded(sent.tx) && code !== 'unknown_bet') return;
+      // tell the player at once: the result is on chain now; indexing it (a chain read + database writes) follows
+      if (txSucceeded(sent.tx)) this.hub.publish(bet.player, 'bet_settled', { bet_id: bet.bet_id, via: 'reveal' });
       await this.store.markSeed(row.idx, 'revealed');
       await this.record(bet.player, bet.bet_id, seed.toString('hex'), 'reveal', sent.hash);
     } catch (err) {
@@ -200,7 +218,10 @@ export class Dealer {
     const after = await this.rpc.view('get_blackjack', { bet_id: bet.bet_id }, 'optimistic');
     const markTo = after ? hand.cards_dealt + count : 18;
     for (let i = 0; i < markTo; i++) await this.store.markSeed(Number(hand.commit_idx) + i, 'revealed');
-    if (!after) await this.record(bet.player, bet.bet_id, seeds[0] ?? '', 'reveal', sent.hash);
+    if (!after) {
+      this.hub.publish(bet.player, 'bet_settled', { bet_id: bet.bet_id, via: 'reveal' });
+      await this.record(bet.player, bet.bet_id, seeds[0] ?? '', 'reveal', sent.hash);
+    }
     return !after;
   }
 

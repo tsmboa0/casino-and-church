@@ -63,18 +63,23 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     return healthInflight;
   });
 
+  let lastPools: { at: number; body: any } | null = null;
   async function health() {
     const dealer = deps.dealer?.status;
     const safe = async <T>(fn: (() => Promise<T>) | undefined, fallback: T): Promise<T> => {
       if (!fn) return fallback;
       try { return await fn(); } catch { return fallback; }
     };
-    const [pools, lag, relayerBalance, dealerBalance] = await Promise.all([
-      safe(deps.view && deps.config.contract ? () => deps.view!('get_pools', {}) as Promise<any> : undefined, null as any),
+    const readPools = deps.view && deps.config.contract ? () => deps.view!('get_pools', {}) as Promise<any> : undefined;
+    const [pools0, lag, relayerBalance, dealerBalance] = await Promise.all([
+      // one retry: a single dropped RPC read must not mark the whole server unhealthy
+      safe(readPools ? () => readPools().catch(() => readPools()) : undefined, null as any),
       safe(deps.lag, 0),
       safe(deps.balance && deps.config.relayerAccount ? async () => (await deps.balance!(deps.config.relayerAccount)).toString() : undefined, '0'),
       safe(deps.balance && deps.config.dealerAccount ? async () => (await deps.balance!(deps.config.dealerAccount)).toString() : undefined, '0'),
     ]);
+    if (pools0 !== null) lastPools = { at: Date.now(), body: pools0 };
+    const pools = pools0 ?? (lastPools && Date.now() - lastPools.at < 60_000 ? lastPools.body : null);
     const ok = pools !== null;
     const hour = new Date();
     const stamp = `h:${hour.getUTCFullYear()}${String(hour.getUTCMonth() + 1).padStart(2, '0')}${String(hour.getUTCDate()).padStart(2, '0')}${String(hour.getUTCHours()).padStart(2, '0')}`;
@@ -334,18 +339,42 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   });
 
   app.post('/relay', async (req) => {
-    const body = req.body as { signed_delegate?: string };
+    const body = req.body as { signed_delegate?: string; wait?: boolean };
     if (!body?.signed_delegate) throw new HttpError(400, 'bad_args', 'Missing signed_delegate.');
     const height = await deps.height();
-    return acceptRelay({
+    let betMethod = false;
+    const accepted = await acceptRelay({
       config: deps.config,
       store: deps.store,
       body: body.signed_delegate,
       ip: req.ip,
       height,
       broadcast: deps.broadcast,
-      observe: deps.activity ? (sender, method, args) => deps.activity!.record(sender, method, args) : undefined,
+      observe: (sender, method, args) => {
+        deps.activity?.record(sender, method, args);
+        if (method === 'place_bet' || method === 'blackjack_act') { betMethod = true; deps.dealer?.nudge(); }   // wake the dealer: a bet is on its way
+      },
     });
+    // wait: true: the server watches the transaction until it has executed and returns the outcome in this response.
+    // It sits next to the RPC provider, so it polls far more cheaply than a distant browser (one round trip saved
+    // per poll). If it cannot confirm within 20 s it answers without the outcome and the client watches as before.
+    if (body.wait && deps.rpcCall && (accepted as { tx_hash?: string }).tx_hash) {
+      const hash = (accepted as { tx_hash: string }).tx_hash;
+      const until = Date.now() + 20_000;
+      while (Date.now() < until) {
+        try {
+          const tx = await deps.rpcCall('tx', { tx_hash: hash, sender_account_id: deps.config.relayerAccount, wait_until: 'NONE' }) as any;
+          const stage = String(tx?.final_execution_status ?? '');
+          const pending = stage === 'NONE' || stage === 'INCLUDED' || stage === 'INCLUDED_FINAL';
+          if (!pending && tx?.status && typeof tx.status === 'object' && ('SuccessValue' in tx.status || 'SuccessReceiptId' in tx.status || 'Failure' in tx.status)) {
+            if (betMethod) deps.dealer?.scanNow();          // the bet is on chain this instant: the dealer picks it up now
+            return { ...(accepted as object), tx };
+          }
+        } catch { /* not seen yet */ }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+    }
+    return accepted;
   });
 
   // ---- the Church oracle: moderates campaigns and attests that a player did a social/project task ----

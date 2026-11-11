@@ -33,6 +33,8 @@ function transient(err: unknown): boolean {
 export class NearRpc {
   private urls: string[];
   private active = 0;
+  /** when each endpoint last failed: the first (paid) endpoint is retried 30 s after a failure instead of being abandoned */
+  private failedAt = new Map<number, number>();
   private tipCache: { at: number; tip: BlockTip } | null = null;
 
   constructor(url: string, private contract: string) {
@@ -40,7 +42,15 @@ export class NearRpc {
     if (!this.urls.length) this.urls = [DEFAULT_TESTNET_RPC];
   }
 
-  get endpoint() { return this.urls[this.active % this.urls.length]!; }
+  get endpoint() { return this.urls[this.pick()]!; }
+  /** the first endpoint that has not failed in the last 30 s (all failed recently: the one that failed longest ago) */
+  private pick(): number {
+    const now = Date.now();
+    for (let i = 0; i < this.urls.length; i++) if (now - (this.failedAt.get(i) ?? 0) > 30_000) return i;
+    let best = 0;
+    for (let i = 1; i < this.urls.length; i++) if ((this.failedAt.get(i) ?? 0) < (this.failedAt.get(best) ?? 0)) best = i;
+    return best;
+  }
 
   private async once(url: string, method: string, params: unknown, timeoutMs: number): Promise<any> {
     const res = await fetch(url, {
@@ -61,15 +71,17 @@ export class NearRpc {
 
   async call(method: string, params: unknown, timeoutMs = READ_TIMEOUT_MS): Promise<any> {
     let last: unknown;
-    for (let attempt = 0; attempt < Math.max(2, this.urls.length); attempt++) {
-      const url = this.endpoint;
+    for (let attempt = 0; attempt < Math.max(2, this.urls.length + 1); attempt++) {
+      const i = this.pick(), url = this.urls[i]!;
       try {
         return await this.once(url, method, params, timeoutMs);
       } catch (err) {
         last = err;
         if (!transient(err)) throw err;
-        if (this.urls.length > 1) this.active++;
-        else await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+        this.failedAt.set(i, Date.now());
+        this.active = i;
+        console.warn(JSON.stringify({ at: 'rpc', host: new URL(url).host, method, attempt, error: err instanceof Error ? err.message.slice(0, 120) : String(err) }));
+        await new Promise((r) => setTimeout(r, 150 * (attempt + 1)));
       }
     }
     throw last instanceof Error ? last : new Error(String(last));

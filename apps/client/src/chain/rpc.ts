@@ -65,6 +65,19 @@ export async function blockTip(): Promise<{ height: bigint; hash: Uint8Array }> 
   return tip;
 }
 
+/**
+ * The chain height right now, without waiting on the network: the last tip we saw plus the blocks since then
+ * (NEAR makes about one a second; this errs low, never high). The tip is refreshed in the background after 15 s.
+ * Only used for a delegate's expiry, which has a wide window.
+ */
+export async function estimatedHeight(): Promise<bigint> {
+  if (!tipCache || Date.now() - tipCache.at > 60_000) return (await blockTip()).height;
+  const age = Date.now() - tipCache.at;
+  if (age > 15_000 && !tipRefreshing) { tipRefreshing = true; void blockTip().catch(() => {}).finally(() => { tipRefreshing = false; }); }
+  return tipCache.tip.height + BigInt(Math.floor(age / 1_200));
+}
+let tipRefreshing = false;
+
 export async function accessNonce(account: string, publicKey: string): Promise<bigint> {
   const row = await rpc('query', {
     request_type: 'view_access_key', finality: 'final', account_id: account, public_key: publicKey,

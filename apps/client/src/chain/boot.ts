@@ -1,4 +1,5 @@
 import { BackendError } from '../core/errors';
+import { bus } from '../core/bus';
 import { ChainBackend } from './chainBackend';
 import type { Health } from './types';
 
@@ -16,15 +17,17 @@ export async function connectChain(api: string): Promise<ChainBackend | { offlin
   } catch {
     return { offline: 'The game server is not answering. Playing the offline demo.' };
   }
-  if (!health.ok || !health.contract) return { offline: 'The chain is not reachable right now. Playing the offline demo.' };
+  // a reachable server that names its contract is the real game; one flaky RPC read on its side (ok: false) is no
+  // reason to drop a player into the demo. Every action handles its own errors.
+  if (!health.contract) return { offline: 'The chain is not reachable right now. Playing the offline demo.' };
   const contract = (import.meta.env.VITE_REALM_CONTRACT as string | undefined) || health.contract;
   const chain = new ChainBackend(api, contract, health.relayer_account);
-  try {
-    await Promise.race([chain.init(), new Promise((_, rej) => setTimeout(() => rej(new BackendError('timeout', 'The chain is slow to answer.')), 15_000))]);
-  } catch (err) {
-    chain.stop();
-    const why = err instanceof Error ? err.message : 'Could not open your account.';
-    return { offline: `${why.replace(/\.$/, '')}. Playing the offline demo.` };
-  }
+  // The server is up, so this IS the real game. Opening a brand-new guest wallet (fund it, wait for its key on
+  // chain) takes several seconds; never block the title screen on it, and never fall back to the demo because of
+  // it. Every action waits for the session anyway; a failure is said out loud and the next action retries.
+  void chain.init().catch((err) => {
+    const why = err instanceof BackendError || err instanceof Error ? err.message : 'Your wallet is still being created.';
+    bus.emit('toast', `${why.replace(/\.$/, '')}. Retrying on your next move.`);
+  });
   return chain;
 }

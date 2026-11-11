@@ -43,8 +43,12 @@ function deviceSize() {
   return { w: Math.round(w * dpr), h: Math.round(h * dpr) };
 }
 
+/** phones and tablets go fullscreen on tap; a desktop browser stays a normal window */
+const touchDevice = () => window.matchMedia('(pointer: coarse)').matches;
+
 async function boot() {
-  const offline = await initBackend();
+  // the server health check runs while the fonts and the art load (it used to hold up the first screen)
+  const backendReady = initBackend();
   await Promise.all([
     document.fonts.load('8px "Silkscreen"'), document.fonts.load('8px "Num"', '0'), document.fonts.load('9px "Pixelify Sans"'), document.fonts.load('700 9px "Silkscreen"'),
   ]).catch(() => { /* fonts are progressive */ });
@@ -151,14 +155,17 @@ async function boot() {
   // Android/desktop browsers: go fullscreen on the first tap and again if the user leaves it (needs a gesture each time).
   // iPhone Safari has no fullscreen API for pages, so the only way there is Add to Home Screen (manifest + meta tags).
   document.addEventListener('pointerdown', () => {
-    if (document.fullscreenElement || !document.documentElement.requestFullscreen) return;
+    if (!touchDevice() || document.fullscreenElement || !document.documentElement.requestFullscreen) return;
     document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
   }, { capture: true });
   mountControls(document.getElementById('controls')!);
   mountFeedback();
+  const offline = await backendReady;
   if (offline) bus.emit('toast', offline);
 
   const manifest = await (await fetch(`${ATLAS_BASE}manifest.json`)).json();
+  // hand over from the inline loading screen (index.html) to the game's own screens
+  const dropBootSplash = () => { const b = document.getElementById('boot-splash'); if (!b) return; b.style.opacity = '0'; setTimeout(() => b.remove(), 400); };
   setManifest(manifest);
   const hud = mountHud(faceCss);
   const world = await new Promise<WorldScene>((res) => {
@@ -190,6 +197,7 @@ async function boot() {
   };
 
   // ---- dev/screenshot hooks
+  dropBootSplash();
   if (q.get('skip')) {
     const prof = { username: q.get('name') ?? 'Wanderer', avatar: q.get('avatar') ?? 'c_tourist', startRealm: (q.get('realm') as any) ?? 'casino', toursDone: { casino: q.get('tour') !== '1', church: q.get('tour') !== '1' } };
     play(prof);
@@ -201,7 +209,7 @@ async function boot() {
   await showSplash(() => {
     audio.unlock();
     audio.music('main');
-    try { document.documentElement.requestFullscreen?.().catch(() => {}); } catch { /* not supported */ }
+    if (touchDevice()) { try { document.documentElement.requestFullscreen?.().catch(() => {}); } catch { /* not supported */ } }
     try { (screen.orientation as any)?.lock?.('landscape')?.catch(() => {}); } catch { /* not supported */ }
   });
   startOnboarding(manifest, play);

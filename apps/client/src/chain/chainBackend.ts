@@ -19,7 +19,6 @@ const questBit = Object.fromEntries(QUESTS.map((q) => [q.bit, q.id]));
 
 export class ChainBackend implements Backend {
   readonly mode = 'chain' as const;
-  private welcomeOnce = false;
   private toasted = false;
   private timer = 0;
 
@@ -35,24 +34,35 @@ export class ChainBackend implements Backend {
    * Throws a BackendError the boot screen can show (e.g. the server's daily account quota).
    */
   async init() {
+    // the table limits need no account: load them at once (with retries), so no panel ever offers a refused bet
+    const table = this.loadTableSoon();
     const session = await this.session();
-    await this.loadTable();
-    try { await this.refresh(); } catch { /* a brand-new account lands a moment later; the next action refreshes */ }
+    // the balance and the welcome chips do not depend on each other: start them together
     void this.ensureWelcome().catch(() => { /* retried before the first bet */ });   // the welcome chips show up right away
+    await Promise.all([
+      table,
+      this.refresh().catch(() => { /* a brand-new account lands a moment later; the next action refreshes */ }),
+    ]);
     this.unlisten = listen(this.api, session.accountId, {
       agent_decision: (d: AgentDecision) => {
         bus.emit('agentDecision', d);
-        if (d.applied && (d.action === 'set_max_bet')) void this.loadTable();
+        if (d.applied && (d.action === 'set_max_bet')) void this.loadTableSoon();
       },
       events_changed: () => bus.emit('eventsChanged'),
     });
+  }
+
+  private async loadTableSoon() {
+    for (let i = 0; i < 6; i++) {
+      try { await this.loadTable(); return; } catch { await new Promise((r) => setTimeout(r, 1500 * (i + 1))); }
+    }
   }
 
   /** the chips the panels offer = the contract's allowed wagers at or under the effective max bet */
   private async loadTable() {
     dropView(this.contract, 'get_params');
     const p = await viewCall(this.contract, 'get_params', {}) as { allowed_wagers?: number[]; effective_max_bet_chips?: number; max_bet_chips?: number } | null;
-    if (!p?.allowed_wagers?.length) return;
+    if (!p?.allowed_wagers?.length) throw new Error('table limits not readable yet');
     const max = Number(p.effective_max_bet_chips ?? p.max_bet_chips ?? Infinity);
     const bets = p.allowed_wagers.map(Number).filter((b) => b <= max);
     setTableBets(bets.length ? bets : [Math.min(...p.allowed_wagers.map(Number))]);
@@ -116,18 +126,21 @@ export class ChainBackend implements Backend {
     const session = await this.session();
     dropView(this.contract, 'get_player');
     dropView(this.contract, 'get_pools');
-    const player = await viewCall(this.contract, 'get_player', { account_id: session.accountId }) as PlayerView | null;
-    const pools = await viewCall(this.contract, 'get_pools', {}) as { treasury: string; jackpot: string };
-    const plots = await viewCall(this.contract, 'get_plots', {}) as (MachineView | null)[];
+    // four independent reads, in parallel (each is a full round trip for a distant player)
+    const [player, pools, plots, balance] = await Promise.all([
+      viewCall(this.contract, 'get_player', { account_id: session.accountId }) as Promise<PlayerView | null>,
+      viewCall(this.contract, 'get_pools', {}) as Promise<{ treasury: string; jackpot: string }>,
+      viewCall(this.contract, 'get_plots', {}) as Promise<(MachineView | null)[]>,
+      accountBalance(session.accountId).catch(() => null),          // the account may still be landing
+    ]);
     if (player) this.writePlayer(player, pools);
     else { store.eco.chips = 0; store.eco.luck = 0; store.eco.faith = 0; }
     this.writePlots(plots ?? []);
-    try {
-      const balance = await accountBalance(session.accountId);
+    if (balance !== null) {
       const reserve = 5n * 10n ** 22n;
       const spendable = balance > reserve ? balance - reserve : 0n;
       store.eco.near = Number(spendable / CHIP) / 100;
-    } catch { /* account may still be landing */ }
+    }
     store.stats.settledAt = Date.now();
     store.saveEco(); store.emit();
     bus.emit('plotsChanged');
@@ -163,10 +176,26 @@ export class ChainBackend implements Backend {
   }
 
   /** relay a call and wait for it. A stale delegate nonce (a fresh account, a second tab) is re-read and retried once. */
-  private async relayed(method: string, args: unknown, gas: bigint): Promise<{ tx: string; done: any }> {
+  /**
+   * One transaction at a time per player. Each carries the key's next nonce, and the chain refuses a nonce at or
+   * below one it has already executed: two sent together (the welcome claim, the profile, a realm change) could
+   * land out of order and one would fail with InvalidNonce. Play never sends two at once, so this costs nothing.
+   */
+  private txChain: Promise<unknown> = Promise.resolve();
+  private serial<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.txChain.then(fn, fn);
+    this.txChain = run.catch(() => { /* the caller handles it; the queue moves on */ });
+    return run;
+  }
+
+  private relayed(method: string, args: unknown, gas: bigint): Promise<{ tx: string; done: any }> {
+    return this.serial(() => this.relayedNow(method, args, gas));
+  }
+  private async relayedNow(method: string, args: unknown, gas: bigint): Promise<{ tx: string; done: any }> {
     for (let attempt = 0; ; attempt++) {
-      const tx = await relay(this.api, this.contract, method, args, gas);
-      const done = await waitTx(tx, this.relayer);
+      const sent = await relay(this.api, this.contract, method, args, gas, true);
+      const tx = sent.hash;
+      const done = sent.tx ?? await waitTx(tx, this.relayer);
       if (txOk(done)) return { tx, done };
       const code = txPanic(done);
       const name = txFailureName(done);
@@ -183,23 +212,26 @@ export class ChainBackend implements Backend {
     return r;
   }
 
-  private async ensureWelcome() {
-    if (this.welcomeOnce) return;
-    this.welcomeOnce = true;
-    const key = `cnc.welcome.v1:${(await this.session()).accountId}`;
-    if (localStorage.getItem(key)) return;
-    try {
-      await this.call('claim_welcome', {});
-      localStorage.setItem(key, '1');
-    } catch (err) {
-      if (err instanceof BackendError && (err.code === 'welcome_claimed' || err.code === 'vault_low')) localStorage.setItem(key, '1');
-      else this.welcomeOnce = false;                     // a transient failure: try again before the next bet
-    }
+  /** one welcome claim per account; every caller (startup, the first bet) waits on the same attempt */
+  private welcomeTask: Promise<void> | null = null;
+  private ensureWelcome(): Promise<void> {
+    this.welcomeTask ??= (async () => {
+      const key = `cnc.welcome.v1:${(await this.session()).accountId}`;
+      if (localStorage.getItem(key)) return;
+      try {
+        await this.call('claim_welcome', {});
+        localStorage.setItem(key, '1');
+      } catch (err) {
+        if (err instanceof BackendError && (err.code === 'welcome_claimed' || err.code === 'vault_low')) localStorage.setItem(key, '1');
+        else { this.welcomeTask = null; throw err; }     // a transient failure: the next action tries again
+      }
+    })();
+    return this.welcomeTask;
   }
 
   async placeBet(r: BetReq): Promise<BetResult> {
     const mark = timing();
-    await this.ensureWelcome();
+    await this.ensureWelcome().catch(() => { /* the bet itself reports a real problem (e.g. no chips) */ });
     mark('welcome');
     const session = await this.session();
     const clientSeed = crypto.getRandomValues(new Uint8Array(32));
@@ -229,10 +261,14 @@ export class ChainBackend implements Backend {
   private async awaitResult(account: string, betId: number, placedHeight: number): Promise<BetResultView> {
     this.toasted = false;
     let stop = () => {};
-    let woke = false;
-    stop = subscribe(this.api, account, (id) => { if (id === betId) woke = true; });
+    // the server pushes "bet_settled" the moment the dealer's reveal lands: it ends the wait between checks at once
+    let wake: (() => void) | null = null;
+    let pushed = false;
+    stop = subscribe(this.api, account, (id) => { if (id === betId) { pushed = true; wake?.(); } });
     const started = Date.now();
     let claimed = false;
+    let nextTimeoutCheck = Date.now() + 6_000;
+    let timeoutBlocks: number | null = null;
     try {
       for (;;) {
         dropView(this.contract, 'get_bet_result');
@@ -243,12 +279,14 @@ export class ChainBackend implements Backend {
           this.toasted = true;
           bus.emit('toast', 'The dealer is slow. Your bet is protected.');
         }
-        if (!claimed) {
+        // the timeout path needs the chain tip; checking it on every pass tripled the reads, so every 6 s is plenty
+        if (!claimed && Date.now() >= nextTimeoutCheck) {
+          nextTimeoutCheck = Date.now() + 6_000;
           const tip = await blockTip();
-          const params = await viewCall(this.contract, 'get_params', {}) as { reveal_timeout_blocks: number };
-          if (tip.height >= BigInt(placedHeight) + BigInt(params.reveal_timeout_blocks ?? 60)) {
+          timeoutBlocks ??= Number((await viewCall(this.contract, 'get_params', {}) as { reveal_timeout_blocks: number }).reveal_timeout_blocks ?? 60);
+          if (tip.height >= BigInt(placedHeight) + BigInt(timeoutBlocks)) {
             try {
-              await relay(this.api, this.contract, 'claim_timeout', { bet_id: betId }, 50n * TGAS);
+              await this.serial(() => relay(this.api, this.contract, 'claim_timeout', { bet_id: betId }, 50n * TGAS));
               claimed = true;
             } catch (err) {
               if (err instanceof BackendError && (err.code === 'already_settled' || err.code === 'unknown_bet')) claimed = true;
@@ -256,14 +294,14 @@ export class ChainBackend implements Backend {
             }
           }
         }
-        await new Promise((r) => setTimeout(r, woke ? 200 : 700));
-        woke = false;
+        if (!pushed) await new Promise<void>((r) => { const t = setTimeout(r, 600); wake = () => { clearTimeout(t); r(); }; });
+        pushed = false; wake = null;
       }
     } finally { stop(); }
   }
 
   private async meterSpin(game: 'wheel' | 'harmony'): Promise<WheelResult> {
-    await this.ensureWelcome();
+    await this.ensureWelcome().catch(() => { /* the bet itself reports a real problem (e.g. no chips) */ });
     const session = await this.session();
     const clientSeed = crypto.getRandomValues(new Uint8Array(32));
     const { tx, done } = await this.relayed('place_bet', {
@@ -357,10 +395,12 @@ export class ChainBackend implements Backend {
       const have = Number(balance > 5n * 10n ** 22n ? balance - 5n * 10n ** 22n : 0n) / 1e24;
       throw new BackendError('no_near', `Your wallet has ${have.toFixed(2)} test NEAR; ${near} NEAR plus a little gas is needed. Tap GET FREE TEST NEAR first.`);
     }
-    const tx = await session.signAndSend({
-      receiverId: this.contract, methodName: 'deposit', args: new TextEncoder().encode('{}'), gas: 30n * TGAS, deposit: yocto,
+    const done = await this.serial(async () => {
+      const tx = await session.signAndSend({
+        receiverId: this.contract, methodName: 'deposit', args: new TextEncoder().encode('{}'), gas: 30n * TGAS, deposit: yocto,
+      });
+      return waitTx(tx, session.accountId);
     });
-    const done = await waitTx(tx, session.accountId);
     if (!txOk(done)) throw new BackendError(txPanic(done) ?? 'bad_args', 'The deposit did not land.');
     await this.refresh();
   }
@@ -430,7 +470,7 @@ export class ChainBackend implements Backend {
   }
 
   async blackjackDeal(wager: number): Promise<BjState> {
-    await this.ensureWelcome();
+    await this.ensureWelcome().catch(() => { /* the bet itself reports a real problem (e.g. no chips) */ });
     const session = await this.session();
     const clientSeed = crypto.getRandomValues(new Uint8Array(32));
     const { done } = await this.relayed('place_bet', {
