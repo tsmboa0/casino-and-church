@@ -148,6 +148,17 @@ function showResult(root: Root, kind: 'win' | 'lose' | 'push' | 'jackpot', title
 }
 const hideResult = (root: Root) => { const r = root.querySelector('#res') as HTMLElement | null; if (r) { r.hidden = true; r.innerHTML = ''; } };
 const oops = (root: Root, e: unknown) => showResult(root, 'push', 'HOLD ON', '', errText(e));
+/**
+ * Check the chips before anything moves: a bet the player cannot cover never starts the reels or the wheel, and
+ * the message says where to get more. (The contract would refuse it anyway, but only after the animation ran.)
+ */
+function canCover(root: Root, chips: number, what: 'bet' | 'tithe' = 'bet'): boolean {
+  if (store.eco.chips >= chips) return true;
+  hideResult(root);
+  showResult(root, 'push', 'NOT ENOUGH CHIPS', '', `This ${what} is ${fmt(chips)} chips and you have ${fmt(store.eco.chips)}. Visit the Cashier by the casino door to buy more.`);
+  audio.play('hit', 0.3);
+  return false;
+}
 /** standard verdict from a bet result */
 function verdict(root: Root, wager: number, payout: number, blessing: number, what: string, tx?: string) {
   const link = tx ? `<br>${txLink(tx, 'VIEW ON EXPLORER')}` : '';
@@ -195,7 +206,7 @@ function slots(root: Root, close: () => void) {
   };
   const go = $<HTMLButtonElement>(root, '#go'), lever = $(root, '#lever'), line = $(root, '#line');
   const spin = async () => {
-    if (busy) return; busy = true; go.disabled = true; hideResult(root);
+    if (busy || !canCover(root, bet)) return; busy = true; go.disabled = true; hideResult(root);
     line.classList.remove('on'); $$(root, '.sl-cell.hit').forEach(c => c.classList.remove('hit'));
     lever.classList.add('pull'); setTimeout(() => lever.classList.remove('pull'), 380);
     const snd = audio.loop('slots', 0.45); vib(12);
@@ -238,7 +249,7 @@ function coinflip(root: Root, close: () => void) {
   hist();
   const go = $<HTMLButtonElement>(root, '#go'), coin = $(root, '#coin');
   go.addEventListener('click', async () => {
-    if (busy) return; busy = true; go.disabled = true; hideResult(root); vib(10); audio.play('hit', 0.4);
+    if (busy || !canCover(root, bet)) return; busy = true; go.disabled = true; hideResult(root); vib(10); audio.play('hit', 0.4);
     // the coin goes up and keeps turning in the air until the chain says how it lands
     coin.className = 'cf-coin'; coin.style.animation = 'none';
     const LIFT = 150;
@@ -285,7 +296,7 @@ function dice(root: Root, close: () => void) {
   cubes.forEach(c => (c.style.transition = 'none')); pose(ang);
   const go = $<HTMLButtonElement>(root, '#go');
   go.addEventListener('click', async () => {
-    if (busy) return; busy = true; go.disabled = true; hideResult(root); vib(10);
+    if (busy || !canCover(root, bet)) return; busy = true; go.disabled = true; hideResult(root); vib(10);
     $(root, '#sum').textContent = 'ROLLING...'; audio.play('hit', 0.45);
     const sp = spinner(pose, [610, 470, -560, 520], ang);
     try {
@@ -347,7 +358,7 @@ function roulette(root: Root, close: () => void) {
   const wh = $(root, '#wh'), bl = $(root, '#bl'), ball = $(root, '#ball'), go = $<HTMLButtonElement>(root, '#go');
   wh.style.transition = 'none'; bl.style.transition = 'none';
   go.addEventListener('click', async () => {
-    if (busy) return; busy = true; go.disabled = true; hideResult(root); $$(root, '.rc.won').forEach(c => c.classList.remove('won'));
+    if (busy || !canCover(root, bet)) return; busy = true; go.disabled = true; hideResult(root); $$(root, '.rc.won').forEach(c => c.classList.remove('won'));
     const snd = audio.loop('roulette', 0.55); vib(10);
     ball.style.transition = 'none'; ball.style.transform = 'translate(0px, -91px)';
     const sp = spinner(([w, b]) => { wh.style.transform = `rotate(${w}deg)`; bl.style.transform = `rotate(${b}deg)`; }, [150, -400], [W, B]);
@@ -434,7 +445,7 @@ function blackjack(root: Root, close: () => void) {
     state = null; mode();
   };
   $(root, '#deal').addEventListener('click', async () => {
-    if (busy) return; busy = true; hideResult(root); state = null; await draw();
+    if (busy || !canCover(root, bet)) return; busy = true; hideResult(root); state = null; await draw();
     const dealBtn = $(root, '#deal'); dealBtn.classList.add('pending'); (dealBtn as HTMLButtonElement).disabled = true;
     try {
       const s = await backend.blackjackDeal!(bet); audio.play('hit', 0.4); vib(8);
@@ -444,7 +455,9 @@ function blackjack(root: Root, close: () => void) {
     finally { busy = false; dealBtn.classList.remove('pending'); (dealBtn as HTMLButtonElement).disabled = false; }
   });
   $$(root, '.bj-btn').forEach(b => b.addEventListener('click', async () => {
-    if (busy || !state) return; busy = true; vib(8);
+    if (busy || !state) return;
+    if (b.dataset.a === 'double' && !canCover(root, state.stake)) return;     // doubling stakes the same again
+    busy = true; vib(8);
     $$(root, '.bj-btn').forEach(x => ((x as HTMLButtonElement).disabled = true));
     b.classList.add('pending');
     try {
@@ -551,7 +564,13 @@ function cashier(root: Root, close: () => void) {
           await backend.deposit(n); show(); showResult(root, 'win', 'CHIPS BOUGHT', Math.round(n * CHIPS_PER_NEAR), `${n} NEAR exchanged`);
         }
         else if (a === 'faucet') { const paid = await backend.faucet(); show(); showResult(root, 'push', 'FAUCET', paid ? `+${paid} NEAR` : 'TEST NEAR SENT', 'Free test NEAR, straight to your wallet'); }
-        else { const amt = a === 'w' ? CHIPS_PER_NEAR : store.eco.chips, n = Math.floor(amt / CHIPS_PER_NEAR); await backend.withdraw(amt); show(); showResult(root, 'push', 'CASHED OUT', `+${n} NEAR`, `${n * CHIPS_PER_NEAR} chips paid out`); }
+        else {
+          if (a === 'wall') await backend.sync?.();      // ALL means what the chain holds now, not what the screen last showed
+          const amt = a === 'w' ? CHIPS_PER_NEAR : store.eco.chips;
+          if (amt <= 0) throw new BackendError('no_chips', 'You have no chips to cash out.');
+          await backend.withdraw(amt); show();
+          showResult(root, 'push', 'CASHED OUT', `+${(amt / CHIPS_PER_NEAR).toFixed(2)} NEAR`, `${fmt(amt)} chips paid out`);
+        }
       } catch (e) { oops(root, e); }
       finally { b.classList.remove('pending'); (b as HTMLButtonElement).disabled = false; }
     }));
@@ -597,6 +616,7 @@ function offering(root: Root, close: () => void) {
   const show = () => { $(root, '#fa').textContent = String(Math.floor(store.eco.faith)); $(root, '#tr').textContent = fmt(store.stats.pool); setBal(root); };
   show();
   $$(root, '[data-t]').forEach(b => b.addEventListener('click', async () => {
+    if (!canCover(root, +b.dataset.t!, 'tithe')) return;
     hideResult(root); b.classList.add('pending'); $$(root, '[data-t]').forEach(x => ((x as HTMLButtonElement).disabled = true));
     try {
       const r = await backend.tithe(+b.dataset.t!);

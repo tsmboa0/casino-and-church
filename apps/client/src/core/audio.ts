@@ -13,7 +13,9 @@ type Track = 'main' | 'casino' | 'church';
 type Sfx = 'hit' | 'roulette' | 'slots' | 'win' | 'lose' | 'blessed';
 const SRC: Record<Track, string> = { main: 'audio/main.mp3', casino: 'audio/casino.mp3', church: 'audio/church.mp3' };
 const VOL: Record<Track, number> = { main: 0.5, casino: 0.42, church: 0.5 };
-const XFADE_S = 2.6;                       // old track fades out while the new one fades in
+const XFADE_S = 2.6;
+/** music level while a game panel is open (a share of the normal level) */
+const DUCK = 0.35;                       // old track fades out while the new one fades in
 const SFX: Record<Sfx, string> = { hit: 'audio/hit.mp3', roulette: 'audio/roulette.mp3', slots: 'audio/slots.wav', win: 'audio/win.m4a', lose: 'audio/lose.m4a', blessed: 'audio/blessed.mp3' };
 
 class AudioManager {
@@ -78,10 +80,10 @@ class AudioManager {
   private fadeIn(t: Track) {
     const el = this.els.get(t)!;
     window.clearTimeout(this.stopTimers.get(t));
-    if (this.muted || this.held) return;
+    if (this.muted) return;
     void this.ctx?.resume();
     if (el.paused) el.play().catch(() => { /* retried by keepAlive */ });
-    this.setGain(t, VOL[t], XFADE_S);
+    this.setGain(t, this.held ? VOL[t] * DUCK : VOL[t], this.held ? 0.6 : XFADE_S);
   }
   private fadeOut(t: Track) {
     this.setGain(t, 0, XFADE_S);
@@ -90,19 +92,21 @@ class AudioManager {
   }
   /** if the wanted track is not playing (the OS paused it, a call came in...), start it again */
   private keepAlive() {
-    if (!this.unlocked || this.muted || this.held || !this.want || document.hidden) return;
+    if (!this.unlocked || this.muted || !this.want || document.hidden) return;
     const el = this.els.get(this.want)!;
-    if (el.paused) { el.play().catch(() => {}); this.setGain(this.want, VOL[this.want], 0.8); }
+    if (el.paused) { el.play().catch(() => {}); this.setGain(this.want, this.held ? VOL[this.want] * DUCK : VOL[this.want], 0.8); }
   }
 
   private held = false;
-  /** a game panel is open: fade the music out and stop it; release() brings the same track back */
+  /**
+   * A game panel is open: turn the music down (not off) so the game's own sounds stand out; release() brings it back
+   * up. It used to fade to silence and stop, which felt exactly like the sound being switched off. Only the sound
+   * button switches sound off.
+   */
   hold() {
     if (this.held) return; this.held = true;
-    const t = this.want; if (!t) return;
-    this.setGain(t, 0, 0.8);
-    window.clearTimeout(this.stopTimers.get(t));
-    this.stopTimers.set(t, window.setTimeout(() => { if (this.held) this.els.get(t)!.pause(); }, 1100));
+    const t = this.want; if (!t || this.muted) return;
+    this.setGain(t, VOL[t] * DUCK, 0.6);
   }
   release() {
     if (!this.held) return; this.held = false;
@@ -112,7 +116,8 @@ class AudioManager {
   setMuted(m: boolean) {
     this.muted = m;
     try { localStorage.setItem('cnc.muted', m ? '1' : '0'); } catch { /* */ }
-    if (m) this.els.forEach((a, t) => { window.clearTimeout(this.stopTimers.get(t)); this.setGain(t, 0, 0.2); window.setTimeout(() => a.pause(), 300); });
+    // the pause is a tracked timer, so un-muting within 0.3 s cancels it (it used to stop the music anyway)
+    if (m) this.els.forEach((a, t) => { window.clearTimeout(this.stopTimers.get(t)); this.setGain(t, 0, 0.2); this.stopTimers.set(t, window.setTimeout(() => { if (this.muted) a.pause(); }, 300)); });
     else if (this.want && this.unlocked) this.fadeIn(this.want);
   }
 

@@ -126,12 +126,14 @@ export class ChainBackend implements Backend {
     const session = await this.session();
     dropView(this.contract, 'get_player');
     dropView(this.contract, 'get_pools');
-    // four independent reads, in parallel (each is a full round trip for a distant player)
+    // four independent reads, in parallel (each is a full round trip for a distant player). Optimistic: this runs
+    // right after the player's own transaction, which 'final' (2-3 blocks behind) would not show yet. The cashier
+    // showed the old chips and wallet after a deposit, and "cash out ALL" then withdrew the stale amount.
     const [player, pools, plots, balance] = await Promise.all([
-      viewCall(this.contract, 'get_player', { account_id: session.accountId }) as Promise<PlayerView | null>,
-      viewCall(this.contract, 'get_pools', {}) as Promise<{ treasury: string; jackpot: string }>,
-      viewCall(this.contract, 'get_plots', {}) as Promise<(MachineView | null)[]>,
-      accountBalance(session.accountId).catch(() => null),          // the account may still be landing
+      viewCall(this.contract, 'get_player', { account_id: session.accountId }, 'optimistic') as Promise<PlayerView | null>,
+      viewCall(this.contract, 'get_pools', {}, 'optimistic') as Promise<{ treasury: string; jackpot: string }>,
+      viewCall(this.contract, 'get_plots', {}, 'optimistic') as Promise<(MachineView | null)[]>,
+      accountBalance(session.accountId, 'optimistic').catch(() => null),   // the account may still be landing
     ]);
     if (player) this.writePlayer(player, pools);
     else { store.eco.chips = 0; store.eco.luck = 0; store.eco.faith = 0; }
@@ -406,6 +408,8 @@ export class ChainBackend implements Backend {
   }
 
   async withdraw(chips: number) { await this.call('withdraw', { amount: (BigInt(chips) * CHIP).toString() }); }
+  /** re-read the player's balances now (the cashier calls it before "cash out ALL") */
+  async sync() { await this.refresh(); }
   async faucet() {
     const session = await this.session();
     const res = await fetch(`${this.api}/faucet`, {

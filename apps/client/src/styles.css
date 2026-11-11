@@ -143,7 +143,9 @@ body:not(.playing) #labels { display: none; }
 .dpad { left: calc(10px + var(--sal)); }
 .face { right: calc(14px + var(--sar)); width: calc(var(--u) * 2.9); height: calc(var(--u) * 1.3); }
 .face .fb { width: calc(var(--u) * 1.3) !important; height: calc(var(--u) * 1.3) !important; }
-.fb.ci { left: 0 !important; top: 0 !important; } .fb.cr { left: calc(var(--u) * 1.55) !important; top: 0 !important; }
+/* two face buttons side by side: O (back) then X (interact). One rule per button: a leftover 4-button layout
+   rule for .fb.cr made the CSS minifier drop this one, which pushed X below the screen on phones. */
+.face .fb.ci { left: 0; top: 0; } .face .fb.cr { left: calc(var(--u) * 1.55); top: 0; }
 #joy { position: fixed; width: 92px; height: 92px; margin: -46px 0 0 -46px; border-radius: 50%; opacity: 0; pointer-events: none; transition: opacity .12s; background: rgba(20,16,28,.35); box-shadow: inset 0 0 0 2px rgba(255,255,255,.28), 0 0 0 2px rgba(20,16,28,.6); }
 #joy.on { opacity: 1; }
 #joy i { position: absolute; left: 50%; top: 50%; width: 38px; height: 38px; margin: -19px 0 0 -19px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #8a70d0, #3d2f6a); box-shadow: inset 0 0 0 2px rgba(255,255,255,.35), 0 2px 0 rgba(0,0,0,.4); }
@@ -162,7 +164,6 @@ body:not(.playing) #labels { display: none; }
   background: radial-gradient(circle at 34% 28%, #44375f, #1d1530 72%); box-shadow: inset 0 0 0 2px rgba(255,255,255,.15), inset 0 3px 0 rgba(255,255,255,.1), 0 4px 0 #0a0710, 0 0 0 2px var(--ink); opacity: .97; }
 .face .fb .gl { width: 54%; height: 54%; }
 .face .fb.on { transform: translateY(3px); filter: brightness(1.35); box-shadow: inset 0 0 0 2px rgba(255,255,255,.3), 0 1px 0 #0a0710, 0 0 0 2px var(--ink), 0 0 16px rgba(255,255,255,.28); }
-.fb.tri { left: var(--u); top: 0; } .fb.sq { left: 0; top: var(--u); } .fb.ci { left: calc(var(--u) * 2); top: var(--u); } .fb.cr { left: var(--u); top: calc(var(--u) * 2); }
 .face .fb.cr { background: radial-gradient(circle at 34% 28%, #4a4472, #1e1a3c 72%); }
 .face .cap { display: none; position: absolute; font-family: var(--f-cap); font-size: 6px; letter-spacing: .08em; color: rgba(244,234,213,.5); pointer-events: none; text-shadow: 0 1px 0 var(--ink); }
 .cap.c-tri { left: calc(var(--u) * 1.5); top: calc(var(--u) * -.2); transform: translateX(-50%); }

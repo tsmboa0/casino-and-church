@@ -88,6 +88,8 @@ export interface Backend {
   claimCampaign?(id: number): Promise<{ chips: number; faith: number }>;
   createCampaign?(c: NewCampaign): Promise<number>;
   closeCampaign?(id: number): Promise<void>;
+  /** OPTIONAL: re-read balances from the chain before acting on them */
+  sync?(): Promise<void>;
   /** OPTIONAL: this device's guest wallet (chain mode) */
   wallet?(): Promise<{ accountId: string; encrypted: boolean }>;
   completeTour?(realm: 'casino' | 'church'): Promise<void>;

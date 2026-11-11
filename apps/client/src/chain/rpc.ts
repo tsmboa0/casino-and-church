@@ -85,8 +85,8 @@ export async function accessNonce(account: string, publicKey: string): Promise<b
   return BigInt(row.nonce);
 }
 
-export async function accountBalance(account: string): Promise<bigint> {
-  const row = await rpc('query', { request_type: 'view_account', finality: 'final', account_id: account });
+export async function accountBalance(account: string, finality: 'final' | 'optimistic' = 'final'): Promise<bigint> {
+  const row = await rpc('query', { request_type: 'view_account', finality, account_id: account });
   return BigInt(row.amount);
 }
 
