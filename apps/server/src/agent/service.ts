@@ -24,6 +24,7 @@ const MIN = 60_000;
 const HOUR = 60 * MIN;
 const ATTEST_EVERY = HOUR;
 const TRIGGER_GAP = 3 * MIN;
+const TRIGGER_REPEAT = 30 * MIN;
 
 /**
  * Don Fortuna and Father Nakamoto. Schedule (R3-4): every `agentEveryMin` (10) minutes with ±60 s jitter, the
@@ -38,6 +39,7 @@ export class Hosts {
   private attesting: Promise<AttestationRow | null> | null = null;
   private samples: { at: number; vault: number; treasury: number }[] = [];
   private lastWinCheck = Date.now();
+  private firedAt = new Map<string, number>();
   private stateCache = new Map<HostId, { at: number; body: unknown }>();
   /** attestation rows never change: one database read per id, ever */
   private attCache = new Map<number, AttestationRow | null>();
@@ -106,6 +108,11 @@ export class Hosts {
     const fire = (agent: HostId, why: string) => {
       const h = this.hosts[agent];
       if (now - h.lastCycleAt < TRIGGER_GAP) return;
+      // the same situation can last a while (e.g. "the church has held 2x the casino"): answer it once per
+      // half hour, not every 3 minutes (it made Don repeat himself three times in five minutes)
+      const key = `${agent}:${why}`;
+      if (now - (this.firedAt.get(key) ?? 0) < TRIGGER_REPEAT) return;
+      this.firedAt.set(key, now);
       void h.cycle(why);
     };
     const win = await this.store.biggestWin(this.lastWinCheck);

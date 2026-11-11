@@ -25,6 +25,10 @@ const ACTIONS: Record<HostId, string[]> = {
 const G = 30n * TGAS;
 
 /** The line players read. Returns a reason when it must be replaced. */
+/** a decision's public line: the prompt asks for 140 characters; the hard limit is looser so a slightly long line
+ *  does not throw away an otherwise valid, signed decision (a quarter of them were, on the live server) */
+export const DECISION_LINE_MAX = 220;
+
 export function lineProblem(line: unknown, max = 140): string | null {
   if (typeof line !== 'string') return 'line missing';
   const t = line.trim();
@@ -54,7 +58,7 @@ export function checkDecision(agent: HostId, raw: { action?: unknown; params?: u
   const action = typeof raw.action === 'string' ? raw.action.trim() : '';
   if (!ACTIONS[agent].includes(action)) return { ok: false, reason: `action "${action.slice(0, 40)}" is not one of my tools` };
   const p = (raw.params && typeof raw.params === 'object' ? raw.params : {}) as Record<string, unknown>;
-  const bad = lineProblem(raw.line);
+  const bad = lineProblem(raw.line, DECISION_LINE_MAX);
   if (bad) return { ok: false, reason: bad };
   const line = String(raw.line).trim();
   const plan = (params: Plan['params'], calls: Plan['calls']): Checked => ({ ok: true, plan: { action, params, line, calls } });

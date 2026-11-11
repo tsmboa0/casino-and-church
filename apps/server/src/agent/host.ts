@@ -8,7 +8,7 @@ import type { Activity } from './activity.ts';
 import type { NearAI, TokenBudget } from './nearai.ts';
 import { forModel, observe, type Snapshot } from './observe.ts';
 import { decisionSystem, templateLine } from './persona.ts';
-import { checkDecision, lineProblem, parseReply, type Plan } from './policy-check.ts';
+import { DECISION_LINE_MAX, checkDecision, lineProblem, parseReply, type Plan } from './policy-check.ts';
 import { newRuleMemory, rulesDecide } from './rules.ts';
 import { checkProof } from './verify.ts';
 
@@ -150,7 +150,7 @@ export class Host {
       row.params = { chips: plan.params.chips! };
       row.params.player = snap.alias_to_account[alias] ?? '';      // stored, never sent to clients
     }
-    row.line = lineProblem(plan.line) ? templateLine(this.agent, plan.action, snap.at) : plan.line;
+    row.line = lineProblem(plan.line, DECISION_LINE_MAX) ? templateLine(this.agent, plan.action, snap.at) : plan.line;
   }
 
   private async act(row: HostDecisionRow, calls: { method: string; args: unknown; gas: bigint }[]): Promise<HostDecisionRow> {
