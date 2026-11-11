@@ -1,0 +1,146 @@
+{
+  "at": "2026-11-10T16:32:06.794Z",
+  "account": "25b939ac67c575b7eff8584dddf4b7c8808e01e7a40d27d0b7998460d56d76cb",
+  "contract": "realm.casinonchurch.testnet",
+  "calls": [
+    {
+      "name": "account",
+      "ms": 3518,
+      "ok": true
+    },
+    {
+      "name": "faucet",
+      "ms": 3014,
+      "ok": true
+    },
+    {
+      "name": "deposit",
+      "ms": 4185,
+      "ok": true
+    },
+    {
+      "name": "claim_welcome",
+      "ms": 5778,
+      "ok": true
+    },
+    {
+      "name": "coin-1",
+      "ms": 9286,
+      "ok": true
+    },
+    {
+      "name": "coin-2",
+      "ms": 10309,
+      "ok": true
+    },
+    {
+      "name": "coin-3",
+      "ms": 7540,
+      "ok": true
+    },
+    {
+      "name": "coin-4",
+      "ms": 8318,
+      "ok": true
+    },
+    {
+      "name": "coin-5",
+      "ms": 8401,
+      "ok": true
+    },
+    {
+      "name": "slots-1",
+      "ms": 8077,
+      "ok": true
+    },
+    {
+      "name": "slots-2",
+      "ms": 7444,
+      "ok": true
+    },
+    {
+      "name": "slots-3",
+      "ms": 8503,
+      "ok": true
+    },
+    {
+      "name": "slots-4",
+      "ms": 8001,
+      "ok": true
+    },
+    {
+      "name": "slots-5",
+      "ms": 7933,
+      "ok": true
+    },
+    {
+      "name": "dice-0",
+      "ms": 7854,
+      "ok": true
+    },
+    {
+      "name": "dice-1",
+      "ms": 8074,
+      "ok": true
+    },
+    {
+      "name": "dice-3",
+      "ms": 8611,
+      "ok": true
+    },
+    {
+      "name": "roulette-17",
+      "ms": 7911,
+      "ok": true
+    },
+    {
+      "name": "roulette-100",
+      "ms": 6722,
+      "ok": true
+    },
+    {
+      "name": "roulette-110",
+      "ms": 8066,
+      "ok": true
+    },
+    {
+      "name": "wheel",
+      "ms": 0,
+      "ok": true,
+      "skipped": "needs 125 bets of 10 chips to fill LUCK at this table limit"
+    },
+    {
+      "name": "blackjack",
+      "ms": 15303,
+      "ok": true
+    },
+    {
+      "name": "tithe",
+      "ms": 5876,
+      "ok": true
+    },
+    {
+      "name": "light_candle",
+      "ms": 3632,
+      "ok": true
+    },
+    {
+      "name": "offer_luck",
+      "ms": 3554,
+      "ok": true
+    },
+    {
+      "name": "claim_quest",
+      "ms": 3763,
+      "ok": true
+    },
+    {
+      "name": "withdraw",
+      "ms": 6026,
+      "ok": true
+    }
+  ],
+  "failures": [],
+  "p50": 7854,
+  "p95": 10309
+}

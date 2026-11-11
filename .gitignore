@@ -1,0 +1,12 @@
+# third-party art: licence forbids sharing; never commit (see PLAN.md §6.4)
+assets/vendor/
+apps/client/public/assets/vendor-built/
+node_modules/
+dist/
+apps/server/dist/
+target/
+.near/
+.env
+.env.local
+*.log
+.DS_Store

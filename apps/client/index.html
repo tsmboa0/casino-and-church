@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=overlays-content" />
+  <meta name="theme-color" content="#14101c" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <!-- "black" (opaque), not "black-translucent": iOS 26 home-screen apps with a translucent status bar get a viewport
+       short by the status-bar height (WebKit bug 301108), leaving a dead strip at the bottom. The game is landscape-only,
+       where iPhones hide the status bar anyway, so the opaque style costs nothing. -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+  <meta name="apple-mobile-web-app-title" content="Casino & Church" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 8 8%27 shape-rendering=%27crispEdges%27%3E%3Crect width=%278%27 height=%278%27 fill=%27%2314101c%27/%3E%3Crect x=%271%27 y=%271%27 width=%273%27 height=%276%27 fill=%27%23ff2e88%27/%3E%3Crect x=%274%27 y=%271%27 width=%273%27 height=%276%27 fill=%27%23f5c542%27/%3E%3C/svg%3E" />
+  <title>The Casino &amp; The Church</title>
+  <!-- first paint, before the game's stylesheet arrives: dark page, nothing unstyled (no white flash, no stray text) -->
+  <style>html,body{margin:0;background:#14101c;color:#14101c;overflow:hidden}#ui{visibility:hidden}</style>
+</head>
+<body>
+  <div id="stage"><div id="game"></div></div>
+  <div id="ui">
+    <div id="labels"></div>
+    <div id="hud"></div>
+    <div id="controls"></div>
+    <div id="onboarding"></div>
+    <div id="modal"></div>
+    <div id="gate"></div>
+    <div id="toasts"></div>
+    <div id="banner"></div>
+    <div id="rotate"><div class="rot-card"><div class="rot-phone"></div><p>Rotate your device</p><small>The Casino &amp; The Church is played in landscape.</small></div></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

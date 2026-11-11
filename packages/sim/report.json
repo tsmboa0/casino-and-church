@@ -1,0 +1,57 @@
+{
+  "generated": "2026-11-10T09:11:00.047Z",
+  "samples_per_game": 2000000,
+  "targets": {
+    "slots": 0.939744,
+    "coin": 0.97,
+    "dice_under": 0.95,
+    "roulette_straight": 0.972972972972973
+  },
+  "rtp": {
+    "slots": {
+      "game": "slots",
+      "samples": 2000000,
+      "rtp": 0.9398365
+    },
+    "coin": {
+      "game": "coin",
+      "samples": 2000000,
+      "rtp": 0.96995344
+    },
+    "dice": {
+      "game": "dice",
+      "samples": 2000000,
+      "rtp": 0.95130036
+    },
+    "roulette": {
+      "game": "roulette",
+      "samples": 2000000,
+      "rtp": 0.975492
+    }
+  },
+  "solvency": [
+    {
+      "luck_per_chip_milli": 80,
+      "bets": 200000,
+      "vault_chips": -290953,
+      "wheel_chips": 779595,
+      "wagered_chips": 20000000,
+      "negative": true
+    },
+    {
+      "luck_per_chip_milli": 40,
+      "bets": 200000,
+      "vault_chips": 85338,
+      "wheel_chips": 404080,
+      "wagered_chips": 20000000,
+      "negative": false
+    }
+  ],
+  "note": "Coin-only play that also takes the wheel is negative at luck 80 and positive at 40. Recommend 40 outside the demo.",
+  "exact": {
+    "slots": 0.939744,
+    "coin": 0.97,
+    "dice": 0.95,
+    "roulette": 0.972972972972973
+  }
+}

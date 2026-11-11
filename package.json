@@ -1,0 +1,12 @@
+{
+  "name": "casino-n-church",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "assets": "python3 -I scripts/build_assets.py",
+    "dev": "pnpm --filter client dev",
+    "build": "pnpm --filter client build",
+    "server": "pnpm --filter server dev",
+    "test:backend": "pnpm --filter @cnc/shared test && pnpm --filter server test && pnpm --filter @cnc/sim vectors && pnpm --filter @cnc/sim sim"
+  }
+}
