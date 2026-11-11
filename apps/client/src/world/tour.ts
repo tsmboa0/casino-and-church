@@ -63,12 +63,16 @@ export async function runTour(c: TourCtx): Promise<boolean> {
   const { scene, guide, player, grid } = c;
   guide.busy = true;
   let lastCall = 0, callIdx = 0;
+  let shown = 0;                       // which message is in the bubble (call-outs and stop lines take turns)
   const callout = () => {
     const now = scene.time.now;
     if (now - lastCall < 6500 || c.bubble.isTyping) return;
     lastCall = now;
+    const mine = ++shown;
     c.bubble.show(guide, c.hostName, CALLOUTS[callIdx++ % CALLOUTS.length].replace('{name}', c.name));
-    scene.time.delayedCall(2600, () => { if (!c.isCancelled()) c.bubble.hide(); });
+    // close only this call-out: if the host has started explaining a stop meanwhile, leave that line alone
+    // (this timer used to close whatever was showing, cutting stop lines short when the player had lagged behind)
+    scene.time.delayedCall(2600, () => { if (shown === mine && !c.isCancelled()) c.bubble.hide(); });
   };
   const near = (r: number) => dist(player, guide) < r;
 
@@ -111,6 +115,7 @@ export async function runTour(c: TourCtx): Promise<boolean> {
       if (c.isCancelled()) break;
       // never speak to an empty room
       await until(scene, () => c.isCancelled() || near(LOST));
+      shown++;
       c.bubble.show(guide, c.hostName, line.replace('{name}', c.name));
       guide.gesture('talk');
       await until(scene, () => c.isCancelled() || !c.bubble.isTyping || input.pressed('interact'));
