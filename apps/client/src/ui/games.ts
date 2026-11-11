@@ -1130,7 +1130,8 @@ export function openSettings(m: HTMLElement, close: () => void, act: SettingsAct
         <div class="stone"><div class="plate"><small>CHIPS</small><b>${fmt(store.eco.chips)}</b></div><div class="plate"><small>LUCK</small><b>${Math.floor(store.eco.luck)}</b></div><div class="plate"><small>FAITH</small><b>${Math.floor(store.eco.faith)}</b></div></div></div>
       <div class="st-grid">
         <div class="st-sec"><h4>SOUND &amp; FEEL</h4>
-          <button class="tg ${audio.muted ? '' : 'on'}" data-a="sound"><span>MUSIC &amp; SOUND</span><i></i></button>
+          <button class="tg ${audio.muted ? '' : 'on'}" data-a="sound"><span>MUSIC</span><i></i></button>
+          <button class="tg ${audio.sfxMuted ? '' : 'on'}" data-a="sfx"><span>SOUND EFFECTS</span><i></i></button>
           <button class="tg ${get('cnc.haptics') === '0' ? '' : 'on'}" data-a="haptics"><span>VIBRATION</span><i></i></button>
           <button class="tg ${pad ? 'on' : ''}" data-a="pad"><span>X / O BUTTONS</span><i></i></button></div>
         <div class="st-sec"><h4>HELP</h4>
@@ -1153,6 +1154,7 @@ export function openSettings(m: HTMLElement, close: () => void, act: SettingsAct
     $$(root, '[data-a]').forEach(btn => btn.addEventListener('click', async () => {
       const a = btn.dataset.a!;
       if (a === 'sound') { audio.setMuted(!audio.muted); bus.emit('soundChanged'); render(); }
+      if (a === 'sfx') { audio.setSfxMuted(!audio.sfxMuted); render(); if (!audio.sfxMuted) audio.play('hit', 0.4); }
       if (a === 'haptics') { set('cnc.haptics', get('cnc.haptics') === '0' ? '1' : '0'); render(); }
       if (a === 'pad') { const c = document.getElementById('controls')!; const on = c.classList.toggle('hidden') === false; set('cnc.pad', on ? '1' : '0'); render(); }
       if (a === 'how') { shell(root, close, 'plaza' as any, 'HOW TO PLAY', `<div class="st">${howToHtml()}<button class="g-key dark" id="bk" style="align-self:center;min-width:160px">BACK TO SETTINGS</button></div>`); playHowTo(root); $(root, '#bk').addEventListener('click', render); }

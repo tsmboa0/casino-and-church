@@ -26,7 +26,11 @@ class AudioManager {
   private stopTimers = new Map<Track, number>();
   private want: Track | null = null;
   private unlocked = false;
+  /** the background music (the speaker button). Game sounds have their own switch: turning the music off must not
+   *  silence the reels, the wheel or a win. */
   muted = (() => { try { return localStorage.getItem('cnc.muted') === '1'; } catch { return false; } })();
+  sfxMuted = (() => { try { return localStorage.getItem('cnc.sfx') === '0'; } catch { return false; } })();
+  setSfxMuted(m: boolean) { this.sfxMuted = m; try { localStorage.setItem('cnc.sfx', m ? '0' : '1'); } catch { /* */ } }
 
   constructor() {
     (Object.keys(SRC) as Track[]).forEach(t => { const a = new Audio(SRC[t]); a.loop = true; a.preload = 'auto'; a.crossOrigin = 'anonymous'; this.els.set(t, a); });
@@ -132,7 +136,7 @@ class AudioManager {
   }
   private start(name: Sfx, vol: number, loop: boolean, maxS: number): (fadeS?: number) => void {
     const none = () => {};
-    if (this.muted || !this.unlocked) return none;
+    if (this.sfxMuted || !this.unlocked) return none;
     const buf = this.buffers.get(name);
     if (this.ctx && buf) {
       const ctx = this.ctx, s = ctx.createBufferSource(), g = ctx.createGain(); g.gain.value = vol;

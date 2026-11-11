@@ -23,7 +23,7 @@ export function mountHud(avatarSheet: (id: string) => string) {
       <div class="b-r">
         <div class="evpills" id="evpills"></div>
         <div class="chips">${icon('coin', 14)}<b id="val-chips">0</b></div>
-        <button class="sysbtn" id="btn-sound" aria-label="Sound"></button>
+        <button class="sysbtn" id="btn-sound" aria-label="Music" title="Music on/off (game sounds stay on)"></button>
         <button class="sysbtn" id="btn-menu" aria-label="Menu">${icon('gear', 14)}</button>
       </div>
     </div>`;
