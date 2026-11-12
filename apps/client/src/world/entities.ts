@@ -175,6 +175,8 @@ export class Bubble {
   private typing = false;
   constructor(_scene: Phaser.Scene) {
     this.el = overlay.make('bubble');
+    // its own layer above the HUD (signs and gates stay below the HUD; a speech bubble may cover it)
+    document.getElementById('ui')!.appendChild(this.el);
     this.el.innerHTML = '<div class="bn"></div><div class="bb"></div><i class="more">&#9660;</i><i class="tail"></i>';
     this.body = this.el.querySelector('.bb')!;
     this.plate = this.el.querySelector('.bn')!;

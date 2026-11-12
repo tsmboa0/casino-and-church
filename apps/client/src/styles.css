@@ -59,7 +59,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 /* ============================================================
    HUD – a slim top bar; the world is drawn BELOW it so nothing is covered
    ============================================================ */
-#hud { position: absolute; left: 0; right: 0; top: 0; opacity: 0; transition: opacity .5s; z-index: 5; }
+#hud { position: absolute; left: 0; right: 0; top: 0; opacity: 0; transition: opacity .5s; z-index: 6; }
 #hud.show { opacity: 1; }
 .bar { zoom: var(--ui); display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; pointer-events: auto;
   padding: calc(3px + var(--sat)) calc(10px + var(--sar)) 3px calc(10px + var(--sal));
@@ -94,7 +94,10 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 /* ============================================================
    Crisp DOM labels that follow the world (name tags, prompts, bubbles, signs)
    ============================================================ */
-#labels { position: absolute; inset: 0; z-index: 7; pointer-events: none; overflow: hidden; }
+/* layers, bottom to top: world labels (signs, gates, tags, prompt) 3 < realm banner 4 < touch controls 5 < HUD 6 <
+   speech bubbles + toasts 7 < panels 8 < onboarding 9 < realm gate dialog 20 < rotate screen 50 */
+#labels { position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
+#ui > .bubble { position: absolute; left: 0; top: 0; z-index: 7; will-change: transform; }
 body:not(.playing) #labels { display: none; }
 #labels > * { position: absolute; left: 0; top: 0; will-change: transform; }
 .nt { font-family: var(--f-cap); font-weight: 700; font-size: calc(8px * var(--ui)); letter-spacing: .04em; color: #fff; white-space: nowrap; text-shadow: 1px 0 #14101c, -1px 0 #14101c, 0 1px #14101c, 0 -1px #14101c, 1px 1px #14101c, -1px -1px #14101c, 1px -1px #14101c, -1px 1px #14101c; }
@@ -136,7 +139,7 @@ body:not(.playing) #labels { display: none; }
 /* ============================================================
    Touch controls — PlayStation layout
    ============================================================ */
-#controls { position: absolute; inset: 0; opacity: 0; transition: opacity .4s; z-index: 6; }
+#controls { position: absolute; inset: 0; opacity: 0; transition: opacity .4s; z-index: 5; }
 #controls.show { opacity: 1; }
 #controls.hidden { display: none; }
 .pad { position: absolute; bottom: calc(4px + var(--sab)); width: calc(var(--u) * 3); height: calc(var(--u) * 3); pointer-events: auto; touch-action: none; transition: opacity .5s; }
@@ -174,11 +177,11 @@ body:not(.playing) #labels { display: none; }
 /* ============================================================
    Toasts + realm banner
    ============================================================ */
-#toasts { position: absolute; left: 50%; top: calc(64px + var(--sat)); transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; }
+#toasts { z-index: 7; position: absolute; left: 50%; top: calc(64px + var(--sat)); transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; }
 .toast { padding: 8px 16px; font-family: var(--f-cap); font-size: 9px; letter-spacing: .06em; color: var(--gold2); animation: tin .25s steps(4); }
 .toast.out { opacity: 0; transition: opacity .4s; }
 @keyframes tin { from { transform: translateY(-14px); opacity: 0; } }
-#banner { position: absolute; left: 0; right: 0; top: 34%; text-align: center; opacity: 0; }
+#banner { position: absolute; left: 0; right: 0; top: 34%; text-align: center; opacity: 0; z-index: 4; pointer-events: none; }
 #banner.go { animation: banner 2.4s ease both; }
 .bn-t { font-family: var(--f-cap); font-weight: 700; font-size: clamp(18px, 6vh, 32px); letter-spacing: .14em; }
 .bn-s { font-family: var(--f-cap); font-size: 9px; letter-spacing: .12em; margin-top: 6px; color: var(--cream); text-shadow: 0 2px 0 var(--ink); }
@@ -208,7 +211,7 @@ body:not(.playing) #labels { display: none; }
 /* ============================================================
    Onboarding
    ============================================================ */
-#onboarding { position: absolute; inset: 0; display: none; place-items: center; }
+#onboarding { position: absolute; inset: 0; display: none; place-items: center; z-index: 9; }
 #onboarding.show { display: grid; pointer-events: auto; background:
   radial-gradient(ellipse at 50% 45%, rgba(20,16,28,.18) 0%, rgba(20,16,28,.74) 72%, rgba(10,6,16,.94) 100%),
   repeating-linear-gradient(0deg, rgba(0,0,0,.14) 0 1px, transparent 1px 3px); }
