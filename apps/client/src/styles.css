@@ -449,3 +449,8 @@ body:not(.playing) #labels { display: none; }
   color: #bff4ff; background: #03080c; box-shadow: 0 0 0 .2em #14101c, inset 0 0 0 .12em #0d4a5e, 0 0 1.1em rgba(61,214,255,.35); text-shadow: 0 0 .4em rgba(61,214,255,.8); }
 .sign.btc small { font-size: .62em; opacity: .7; } .sign.btc b { font-family: "Num", var(--f-cap); font-weight: 400; } .sign.btc i { font-style: normal; font-size: .7em; }
 .sign.btc.up { color: #3dffa0; text-shadow: 0 0 .4em rgba(61,255,160,.8); } .sign.btc.down { color: #ff6d86; text-shadow: 0 0 .4em rgba(255,77,109,.8); }
+/* the BTC Exchange's name plate: a neon ticker, always lit (it should stand out on the casino floor) */
+.sign.tag.exch, .sign.tag.exch.near { opacity: 1; font-size: calc(6px * var(--ui)); color: #3dffa0; background: #03080c;
+  box-shadow: 0 0 0 .2em #3dd6ff, 0 0 1.2em rgba(61,214,255,.55), 0 .3em 0 .2em rgba(0,0,0,.35); text-shadow: 0 0 .45em rgba(61,255,160,.9);
+  animation: exch-glow 2.4s ease-in-out infinite; }
+@keyframes exch-glow { 50% { box-shadow: 0 0 0 .2em #3dffa0, 0 0 1.6em rgba(61,255,160,.6), 0 .3em 0 .2em rgba(0,0,0,.35); } }

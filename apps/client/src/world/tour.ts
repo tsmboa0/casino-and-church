@@ -18,6 +18,7 @@ export const CASINO_STOPS: TourStop[] = [
   { wp: 5, gesture: 'point_up', mark: [21.5, 15], lines: ['Roulette. Red, black, or one number for thirty-six to one.'] },
   { wp: 6, gesture: 'point_up', mark: [34.5, 24], lines: ['The Dice Den. Under seven, over seven, or the lucky seven itself.'] },
   { wp: 7, gesture: 'point_up', mark: [20, 24.5], lines: ["Founders' Row. Earn your standing and one of these plots is yours.", 'Your name on the deed, your machine on my floor.'] },
+  { wp: 11, face: 'up', gesture: 'point_up', mark: [4.4, 11.6], lines: ['The BTC Exchange. Call Bitcoin up or down for the next minute: a right call pays 1.9 times.', "I don't set the price. An oracle running in sealed hardware does, OutLayer's. Not even I can touch it."] },
   { wp: 10, face: 'up', gesture: 'point_up', mark: [2, 7.6], lines: ['The House Monitor. The vault, the table limits, every rule I set, live.', 'I run this house myself, every ten minutes. Every decision is signed and put on chain. Walk up and check me.'] },
   { wp: 9, face: 'down', mark: [4.5, 4], lines: ['And this is my office. Knock any time: talk to me about the house.', 'Stay in here too long and your FAITH fades. The Harmony Wheel waits at the Crossroads.'] },
 ];

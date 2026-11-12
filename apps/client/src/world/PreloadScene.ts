@@ -130,22 +130,70 @@ export class PreloadScene extends Phaser.Scene {
       r(26, 0, 12, 5, '#14101c'); r(27, 1, 10, 3, '#f5c542');                                                                   // the "VS" plate
       r(0, 34, 64, 2, 'rgba(0,0,0,0.35)');
     });
-    // ----- THE BTC EXCHANGE: a trading kiosk. Marquee on top (the live price is a DOM label over it), a candle chart,
-    //       a green UP and a red DOWN button, a cyan neon frame on a dark pedestal
-    mk('exchange_tex', 64, 56, c => {
+    // ----- THE BTC EXCHANGE: a giant candlestick ticker wall. Marquee on top (the live price is a DOM label over it),
+    //       a BTC coin and a LIVE light, a candle chart with wicks, volume and a moving average, a ticker tape, two legs
+    mk('tradewall_tex', 128, 64, c => {
       const r = (x: number, y: number, w: number, h: number, f: string) => { c.fillStyle = f; c.fillRect(x, y, w, h); };
-      r(8, 48, 48, 8, '#14101c'); r(9, 48, 46, 6, '#1d2a33'); r(9, 48, 46, 1, '#2e4552'); r(6, 54, 52, 2, 'rgba(0,0,0,0.4)');   // pedestal
-      r(2, 0, 60, 50, '#14101c'); r(3, 1, 58, 48, '#0b1a24'); r(3, 1, 58, 1, '#3dd6ff'); r(3, 48, 58, 1, '#0d5a73');            // cabinet + neon
-      r(3, 1, 1, 48, '#1b6f8a'); r(60, 1, 1, 48, '#1b6f8a');
-      r(6, 3, 52, 11, '#14101c'); r(7, 4, 50, 9, '#04121a'); r(7, 4, 50, 1, '#0d4a5e');                                          // marquee (price label sits here)
-      r(6, 16, 52, 24, '#14101c'); r(7, 17, 50, 22, '#03080c');                                                                 // screen
-      for (let y = 20; y < 38; y += 4) r(8, y, 48, 1, '#0a1a22');                                                               // grid
-      const candles: [number, number, number, boolean][] = [[10, 30, 5, true], [14, 27, 6, true], [18, 29, 4, false], [22, 24, 7, true], [26, 26, 5, false], [30, 21, 6, true], [34, 23, 4, false], [38, 19, 6, true], [42, 22, 5, false], [46, 18, 6, true], [50, 20, 4, false]];
-      for (const [x, y, h, up] of candles) { r(x + 1, y - 2, 1, h + 4, up ? '#1f8a5a' : '#8a1f33'); r(x, y, 3, h, up ? '#3dffa0' : '#ff4d6d'); }
-      r(8, 25, 48, 1, 'rgba(255,210,74,0.55)');                                                                                 // the lock line
-      r(14, 41, 14, 6, '#14101c'); r(15, 42, 12, 4, '#19b36d'); r(19, 43, 4, 1, '#e8fff4'); r(20, 42, 2, 1, '#e8fff4');           // UP button
-      r(36, 41, 14, 6, '#14101c'); r(37, 42, 12, 4, '#d8344f'); r(41, 44, 4, 1, '#fff0f2'); r(42, 45, 2, 1, '#fff0f2');           // DOWN button
+      r(12, 56, 6, 8, '#14101c'); r(110, 56, 6, 8, '#14101c'); r(13, 56, 4, 7, '#2e4552'); r(111, 56, 4, 7, '#2e4552');      // legs
+      r(4, 62, 120, 2, 'rgba(0,0,0,0.45)');
+      r(0, 0, 128, 57, '#14101c'); r(1, 1, 126, 55, '#071018');                                                                // body
+      r(1, 1, 126, 1, '#3dd6ff'); r(1, 55, 126, 1, '#0d5a73'); r(1, 1, 1, 55, '#1b6f8a'); r(126, 1, 1, 55, '#1b6f8a');          // neon frame
+      for (const x of [0, 125]) for (let y = 4; y < 54; y += 6) r(x, y, 3, 2, y % 12 === 4 ? '#3dffa0' : '#ff4d6d');           // marquee bulbs
+      // marquee: the BTC coin (left), the price (DOM, centre), a LIVE light (right)
+      r(4, 3, 120, 10, '#14101c'); r(5, 4, 118, 8, '#02070b'); r(5, 4, 118, 1, '#0d4a5e');
+      r(8, 5, 6, 6, '#14101c'); r(9, 5, 4, 6, '#f7931a'); r(8, 6, 6, 4, '#f7931a'); r(10, 6, 1, 4, '#fff3dc'); r(11, 6, 1, 1, '#fff3dc'); r(11, 8, 1, 1, '#fff3dc'); r(11, 9, 1, 1, '#fff3dc');
+      r(112, 6, 3, 3, '#ff2e4d'); r(113, 7, 1, 1, '#ffd0d8'); r(116, 7, 5, 1, '#ff8a9a');
+      // the chart
+      r(4, 15, 120, 31, '#14101c'); r(5, 16, 118, 29, '#02060a');
+      for (let y = 19; y < 44; y += 5) r(6, y, 116, 1, '#0a1a22');
+      for (let x = 20; x < 122; x += 20) r(x, 17, 1, 27, '#081620');
+      // a deterministic walk: an uptrend with pullbacks, ending on a big green candle
+      const N = 26; let price = 30; const cs: { o: number; cl: number; hi: number; lo: number }[] = [];
+      for (let i = 0; i < N; i++) {
+        const drift = Math.sin(i * 0.9) * 2.4 + (i % 5 === 3 ? -3.2 : 2.3) + (i === N - 1 ? 3 : 0);
+        const o = price, cl = price + drift, hi = Math.max(o, cl) + 1 + (i * 7) % 3, lo = Math.min(o, cl) - 1 - (i * 5) % 2;
+        cs.push({ o, cl, hi, lo }); price = cl;
+      }
+      const vals = cs.flatMap(k => [k.hi, k.lo]), mn = Math.min(...vals), mx = Math.max(...vals);
+      const Y = (v: number) => Math.round(40 - ((v - mn) / (mx - mn)) * 22);                                          // rows 18..40
+      cs.forEach((k, i) => {
+        const x = 8 + i * 4.5 | 0, up = k.cl >= k.o;
+        r(x + 1, Y(k.hi), 1, Y(k.lo) - Y(k.hi) + 1, up ? '#1f8a5a' : '#8a1f33');                                         // wick
+        const top = Y(Math.max(k.o, k.cl)), bot = Y(Math.min(k.o, k.cl));
+        r(x, top, 3, Math.max(1, bot - top + 1), up ? '#3dffa0' : '#ff4d6d');                                            // body
+        r(x, 42 + (up ? 0 : 1), 3, up ? 2 : 1, up ? '#145a3a' : '#5a1424');                                               // volume
+      });
+      // the moving average (gold) and the last price line (dashed)
+      cs.forEach((_, i) => { if (i < 3) return; const ma = (cs[i].cl + cs[i - 1].cl + cs[i - 2].cl + cs[i - 3].cl) / 4; r(8 + i * 4.5 | 0, Y(ma), 4, 1, '#ffd24a'); });
+      const ly = Y(cs[N - 1].cl); for (let x = 6; x < 122; x += 4) r(x, ly, 2, 1, 'rgba(61,255,160,0.45)');
+      r(118, ly - 1, 5, 3, '#3dffa0');
+      // ticker tape
+      r(4, 47, 120, 7, '#14101c'); r(5, 48, 118, 5, '#000');
+      for (let x = 7, i = 0; x < 118; x += 14, i++) {
+        const up = i % 3 !== 1;
+        r(x, 49, 6, 1, '#7a8a94'); r(x, 51, 4, 1, '#7a8a94');                                                              // "BTC 73k"
+        r(x + 7, up ? 50 : 49, 3, 1, up ? '#3dffa0' : '#ff4d6d'); r(x + 8, up ? 49 : 50, 1, 2, up ? '#3dffa0' : '#ff4d6d');   // up/down arrow
+      }
     });
+    // ----- the BULL and the BEAR, on lit pedestals either side of the exchange
+    const statue = (key: string, bull: boolean) => mk(key, 24, 24, c => {
+      const r = (x: number, y: number, w: number, h: number, f: string) => { c.fillStyle = f; c.fillRect(x, y, w, h); };
+      const K = '#14101c', G = bull ? '#d9a03a' : '#b8323f', D = bull ? '#8a5a14' : '#6b1424', H = bull ? '#ffe08a' : '#ff8a9a';
+      r(2, 18, 20, 6, K); r(3, 18, 18, 5, '#2a2236'); r(3, 18, 18, 1, '#4a3a68'); r(8, 21, 8, 1, bull ? '#3dffa0' : '#ff4d6d');   // pedestal + plaque
+      if (bull) {
+        r(3, 8, 13, 8, K); r(4, 9, 11, 6, G); r(4, 13, 11, 2, D); r(5, 9, 6, 1, H);                                       // body
+        r(14, 6, 7, 8, K); r(15, 7, 5, 6, G); r(18, 11, 3, 2, D); r(20, 11, 1, 1, K); r(17, 8, 1, 1, K);                 // head down, charging
+        r(14, 3, 1, 4, '#fff1c8'); r(13, 3, 2, 1, '#fff1c8'); r(20, 3, 1, 4, '#fff1c8'); r(20, 3, 2, 1, '#fff1c8');          // horns
+        [4, 7, 11, 14].forEach(x => { r(x, 15, 2, 3, K); r(x, 15, 1, 3, D); });                                            // legs
+        r(2, 8, 1, 4, K); r(1, 11, 2, 1, K);                                                                               // tail
+      } else {
+        r(4, 7, 16, 9, K); r(5, 8, 14, 7, G); r(5, 13, 14, 2, D); r(9, 8, 6, 1, H);                                       // body (big, hunched)
+        r(0, 6, 8, 8, K); r(1, 7, 6, 6, G); r(1, 5, 2, 2, K); r(6, 5, 2, 2, K); r(1, 10, 2, 2, '#e8a0a8'); r(0, 11, 1, 1, K); r(3, 8, 1, 1, K);   // head, ears, snout, eye
+        [5, 8, 14, 17].forEach(x => { r(x, 15, 2, 3, K); r(x, 15, 1, 3, D); });                                            // legs (paws)
+        r(5, 17, 1, 1, '#fff'); r(17, 17, 1, 1, '#fff');                                                                   // claws
+      }
+    });
+    statue('bull_tex', true); statue('bear_tex', false);
     // ----- a full-size craps table (the pack's one is far smaller than the other tables)
     mk('craps_tex', 128, 64, c => {
       const r = (x: number, y: number, w: number, h: number, f: string) => { c.fillStyle = f; c.fillRect(x, y, w, h); };
