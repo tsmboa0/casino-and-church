@@ -1159,7 +1159,7 @@ function market(root: Root, close: () => void) {
     else {
       const left = (s.open?.lockAt ?? 0) - now(), my = mineIn(s, L.epoch);
       const winning = my && p != null && L.lockPrice != null ? (p === L.lockPrice ? 'even' : (p > L.lockPrice) === (my.side === 'up') ? 'ahead' : 'behind') : '';
-      lv.innerHTML = `<div class="mk-h"><span>LIVE #${L.epoch}</span><b>${s.pending || left <= 0 ? '<i class="mk-spin"></i> PRICING' : `ENDS ${clock(left)}`}</b></div>
+      lv.innerHTML = `<div class="mk-h"><span>LIVE #${L.epoch}</span><b class="mk-t res ${left > 0 && left < 10_000 ? 'hot' : ''}">${s.pending || left <= 0 ? '<i class="mk-spin"></i> PRICING' : `ENDS IN ${clock(left)}`}</b></div>
         <div class="mk-row"><span>LOCKED AT</span><b>${usd(L.lockPrice)}</b></div>
         ${p != null && L.lockPrice != null ? `<div class="mk-row"><span>NOW</span><b class="${p > L.lockPrice ? 'up' : p < L.lockPrice ? 'down' : ''}">${usd(p)} ${p > L.lockPrice ? ARROW.up : p < L.lockPrice ? ARROW.down : '='}</b></div>` : ''}
         <div class="mk-row"><span>${ARROW.up} ${fmt(L.up)} &middot; ${ARROW.down} ${fmt(L.down)}</span><b>${L.bets} BET${L.bets === 1 ? '' : 'S'}</b></div>
@@ -1176,8 +1176,11 @@ function market(root: Root, close: () => void) {
     const tlStart = O && !isIdle ? O.openAt : now(), tlLock = O && !isIdle ? O.lockAt : now() + s.roundS * 1000, tlEnd = tlLock + s.roundS * 1000;
     const pct = Math.max(0, Math.min(100, ((now() - tlStart) / (tlEnd - tlStart)) * 100));
     $(root, '#tlnow').style.left = `${pct.toFixed(2)}%`;
-    $(root, '#tla').textContent = isIdle ? 'the first bet starts a 60 s window' : lockLeft > 0 ? `bets close in ${clock(lockLeft)}` : 'betting closed';
-    $(root, '#tlb').textContent = isIdle ? 'result one minute after it closes' : `result in ${clock(tlEnd - now())}`;
+    const resLeft = tlEnd - now(), tla = $(root, '#tla'), tlb = $(root, '#tlb');
+    tla.textContent = isIdle ? 'the first bet starts a 60 s window' : lockLeft > 0 ? `BETS CLOSE IN ${clock(lockLeft)}` : 'BETTING CLOSED';
+    tlb.textContent = isIdle ? 'result one minute after it closes' : `RESULT IN ${clock(resLeft)}`;
+    tla.className = `mk-t bet ${isIdle ? 'idle' : lockLeft > 0 && lockLeft < 10_000 ? 'hot' : ''}`;
+    tlb.className = `mk-t res ${isIdle ? 'idle' : resLeft < 10_000 ? 'hot' : ''}`;
     $(root, '#pu').textContent = `pays ${s.payout}× · pool ${fmt(O?.up ?? 0)}`;
     $(root, '#pd').textContent = `pays ${s.payout}× · pool ${fmt(O?.down ?? 0)}`;
     const key = s.wagers.join(',');

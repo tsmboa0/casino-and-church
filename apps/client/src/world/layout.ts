@@ -300,12 +300,13 @@ export function buildWorld(sizes: Sizes): World {
   interactables.push({ id: 'market', kind: 'market', label: 'BTC Exchange', rect: area(1.6, 16, 5.6, 1.9) });
   signs.push({ x: 70, y: 12.45 * T, text: 'BTC', kind: 'btc', anchor: '-50%, -50%' });                    // the wall's marquee
   // ---- blackjack (out of order) and roulette, south of the boulevard
-  P('j/blackjack', 9, 16);
-  [10, 12, 14].forEach(x => P('c/tables/stool_red', x, 17, { solid: NS, still: true }));
-  patron('p-dealer', 'c_dealer_f', 'Dealer', 12, 13.3, 'down');
-  signs.push({ x: 8.5 * T, y: 16.4 * T, text: 'MAX', kind: 'limit', anchor: '-50%, -100%' });   // live table limit (the painted sign said $25)
-  interactables.push({ id: 'blackjack', kind: 'blackjack', label: 'Blackjack', rect: area(9, 17, 6, 2), around: area(8, 12, 8, 5), op: 'p-dealer' });
-  light(12, 14.5, 60, 0xffd27a, 0.24, 0.03);
+  // one tile east of where it was: a gap between the table and the BTC Exchange's ticker wall
+  P('j/blackjack', 10, 16);
+  [11, 13, 15].forEach(x => P('c/tables/stool_red', x, 17, { solid: NS, still: true }));
+  patron('p-dealer', 'c_dealer_f', 'Dealer', 13, 13.3, 'down');
+  signs.push({ x: 9.6 * T, y: 16.4 * T, text: 'MAX', kind: 'limit', anchor: '-50%, -100%' });   // live table limit (the painted sign said $25)
+  interactables.push({ id: 'blackjack', kind: 'blackjack', label: 'Blackjack', rect: area(10, 17, 6, 2), around: area(9, 12, 8, 5), op: 'p-dealer' });
+  light(13, 14.5, 60, 0xffd27a, 0.24, 0.03);
 
   P('j/roulette_a', 18, 16);
   [19, 21, 23].forEach(x => P('c/tables/stool_green', x, 17, { solid: NS, still: true }));
@@ -487,7 +488,7 @@ export function buildWorld(sizes: Sizes): World {
   signs.push({ x: CHURCH_WALL_X - 2, y: DOOR_Y0 + 2, text: 'CHURCH', kind: 'dirR', anchor: '-100%, 0' });
   // one label per place (they brighten when you walk near)
   tag(5, 6.9, "FORTUNA'S OFFICE"); tag(2, 9.35, 'HOUSE MONITOR'); tag(13, 2.4, 'SLOTS'); tag(4.4, 18.95, 'BTC EXCHANGE'); tag(26, 2.4, 'SLOTS'); tag(19.5, 9.0, 'WHEEL OF FORTUNE'); tag(34.5, 2.4, 'CASHIER');
-  tag(12, 12.5, 'BLACKJACK'); tag(21.5, 12.5, 'ROULETTE'); tag(34.5, 12.5, 'COIN FLIP');
+  tag(13, 12.5, 'BLACKJACK'); tag(21.5, 12.5, 'ROULETTE'); tag(34.5, 12.5, 'COIN FLIP');
   tag(5.5, 21.5, 'LOUNGE & BAR'); tag(20, 21.5, "FOUNDERS' PLOTS"); tag(36.6, 21.5, 'DICE DEN');
   tag(43, 2.5, 'HARMONY WHEEL'); tag(43, 15.4, 'THE WORD AT THE CROSSROADS');  tag(48.5, 5.4, 'QUEST BOARD'); tag(50.5, 22.4, 'CONFESSIONAL'); tag(52, 2.4, 'VOTIVE CANDLES'); tag(51, 16.6, 'OFFERING BOX');
   tag(81.8, 6.9, 'SANCTUM'); tag(79.5, 9.35, 'THE LEDGER'); tag(82, 11.0, 'SCRIPTORIUM'); tag(78, 21.4, "PILGRIMS' HALL"); tag(53.5, 21.4, 'CLOISTER');
