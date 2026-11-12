@@ -212,7 +212,7 @@ fn result_view(r: &StoredResult) -> BetResultView {
         chain_seed: to_hex(&r.chain_seed),
         block_seed: if r.via_timeout { to_hex(&r.block_seed) } else { String::new() },
         settled_height: r.settled_height,
-        via: if r.via_timeout { "timeout".into() } else { "reveal".into() },
+        via: if r.game == GameKind::Market { "oracle".into() } else if r.via_timeout { "timeout".into() } else { "reveal".into() },
         shoe: r.shoe.as_ref().map(|seeds| seeds.iter().map(|s| to_hex(s)).collect()),
     }
 }

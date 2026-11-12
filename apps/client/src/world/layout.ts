@@ -38,7 +38,7 @@ export interface NpcDef {
 }
 export interface DoorDef { key: string; x: number; y: number; trigger: Rect }
 export interface Spawn { x: number; y: number }
-export interface SignDef { x: number; y: number; text: string; kind: 'sale' | 'casino' | 'church' | 'zone' | 'tag' | 'dirL' | 'dirR' | 'gateC' | 'gateH' | 'ticker' | 'limit'; anchor?: string; plot?: number }
+export interface SignDef { x: number; y: number; text: string; kind: 'sale' | 'casino' | 'church' | 'zone' | 'tag' | 'dirL' | 'dirR' | 'gateC' | 'gateH' | 'ticker' | 'limit' | 'btc'; anchor?: string; plot?: number }
 export interface PlotSpot { id: number; x: number; y: number }   // world px: bottom-centre of the plot, where the machine stands
 export interface BarDef extends Rect { style: 'casino' | 'church' | 'plaza' }
 
@@ -63,7 +63,7 @@ export interface World {
 const pad = (n: number) => String(n).padStart(3, '0');
 const T = TILE;
 /** generated textures (PreloadScene) that props can use */
-const GEN: Sizes = { 'x/confess': { w: 48, h: 48 }, 'x/ledger': { w: 32, h: 24 }, 'x/board': { w: 64, h: 48 }, 'x/craps': { w: 128, h: 64 }, 'x/pillar': { w: 16, h: 48 }, 'x/fortune': { w: 48, h: 72 }, 'x/harmony': { w: 48, h: 72 } };
+const GEN: Sizes = { 'x/confess': { w: 48, h: 48 }, 'x/ledger': { w: 32, h: 24 }, 'x/board': { w: 64, h: 48 }, 'x/craps': { w: 128, h: 64 }, 'x/pillar': { w: 16, h: 48 }, 'x/fortune': { w: 48, h: 72 }, 'x/harmony': { w: 48, h: 72 }, 'x/exchange': { w: 64, h: 56 } };
 
 function hash(x: number, y: number): number {
   let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) >>> 0;
@@ -358,10 +358,16 @@ export function buildWorld(sizes: Sizes): World {
   P('x/board', 41, 16, { solid: { x: 0, y: 8, w: 64, h: 40 } });                 // THE WORD AT THE CROSSROADS: the two hosts' moves
   interactables.push({ id: 'board', kind: 'board', label: 'The Word at the Crossroads', rect: area(41, 13, 4, 1) });
   signs.push({ x: 43 * T, y: 14.15 * T, text: 'THE HOSTS ARE DECIDING...', kind: 'ticker', anchor: '-50%, -50%' });
-  [40, 45].forEach(x => P('c/outside/bollard_lit', x, 14, { glow: { color: 0xffe0a0, r: 16, a: 0.3, dx: 8, dy: -8 } }));
+  // the bollards no longer close the road: walk past the board on either side into the garden
+  [40, 45].forEach(x => P('c/outside/bollard_lit', x, 14, { solid: NS, glow: { color: 0xffe0a0, r: 16, a: 0.3, dx: 8, dy: -8 } }));
   P('c/lobby/spade_statue', 41, 20); P('m/chapel/saint_statue', 44, 20);
-  P('c/outside/street_lamp', 42, 22, { glow: { color: 0xffe0a0, r: 30, a: 0.25, dx: 8, dy: -42 } });
-  P('c/strip/palm_tree', 40, 26); P('c/strip/palm_tree', 44, 26);
+  // ---- THE BTC EXCHANGE: a trading kiosk in the garden. Neutral ground: BTC is neither the casino's nor the church's.
+  // One-minute UP/DOWN rounds, priced by the OutLayer TEE oracle (contracts/realm/src/market.rs).
+  P('x/exchange', 41, 25, { solid: { x: 4, y: 30, w: 56, h: 26 } });
+  [40, 45].forEach(x => P('c/outside/bollard_lit', x, 25, { solid: NS, glow: { color: 0x3dd6ff, r: 18, a: 0.34, dx: 8, dy: -8 } }));
+  light(43, 24, 74, 0x3dd6ff, 0.3, 0.05); light(43, 26.5, 40, 0x3dffa0, 0.18, 0.08);
+  interactables.push({ id: 'market', kind: 'market', label: 'BTC Exchange', rect: area(41, 26, 4, 1.6), around: area(40, 21, 6, 3.4) });
+  signs.push({ x: 43 * T, y: 23.05 * T, text: 'BTC', kind: 'btc', anchor: '-50%, -50%' });            // live price on the kiosk's marquee
 
   // =====================================================================================
   //  CHURCH
@@ -483,7 +489,7 @@ export function buildWorld(sizes: Sizes): World {
   tag(5, 6.9, "FORTUNA'S OFFICE"); tag(2, 9.35, 'HOUSE MONITOR'); tag(13, 2.4, 'SLOTS'); tag(4, 12.6, 'SLOTS'); tag(26, 2.4, 'SLOTS'); tag(19.5, 9.0, 'WHEEL OF FORTUNE'); tag(34.5, 2.4, 'CASHIER');
   tag(12, 12.5, 'BLACKJACK'); tag(21.5, 12.5, 'ROULETTE'); tag(34.5, 12.5, 'COIN FLIP');
   tag(5.5, 21.5, 'LOUNGE & BAR'); tag(20, 21.5, "FOUNDERS' PLOTS"); tag(36.6, 21.5, 'DICE DEN');
-  tag(43, 2.5, 'HARMONY WHEEL'); tag(43, 15.4, 'THE WORD AT THE CROSSROADS');
+  tag(43, 2.5, 'HARMONY WHEEL'); tag(43, 15.4, 'THE WORD AT THE CROSSROADS'); tag(43, 21.2, 'BTC EXCHANGE');
   tag(48.5, 5.4, 'QUEST BOARD'); tag(50.5, 22.4, 'CONFESSIONAL'); tag(52, 2.4, 'VOTIVE CANDLES'); tag(51, 16.6, 'OFFERING BOX');
   tag(81.8, 6.9, 'SANCTUM'); tag(79.5, 9.35, 'THE LEDGER'); tag(82, 11.0, 'SCRIPTORIUM'); tag(78, 21.4, "PILGRIMS' HALL"); tag(53.5, 21.4, 'CLOISTER');
 

@@ -105,16 +105,16 @@ export class KeyPool {
     return this.submit(this.functionCall(method, args, gas), this.contractId);
   }
 
-  /** Sign, submit, and wait. A nonce error is retried once on the next key. */
-  callAndWait(method: string, args: unknown, gas: bigint): Promise<{ hash: string; tx: any }> {
-    return this.callsAndWait([{ method, args, gas }]);
+  /** Sign, submit, and wait. A nonce error is retried once on the next key. `deposit` needs a full-access key. */
+  callAndWait(method: string, args: unknown, gas: bigint, deposit = 0n): Promise<{ hash: string; tx: any }> {
+    return this.callsAndWait([{ method, args, gas, deposit }]);
   }
 
   /**
    * Several FunctionCall actions in ONE transaction, executed atomically in order (all succeed or all revert).
    * The AI hosts use it to anchor `record_decision` together with the action it justifies.
    */
-  async callsAndWait(calls: { method: string; args: unknown; gas: bigint }[]): Promise<{ hash: string; tx: any }> {
+  async callsAndWait(calls: { method: string; args: unknown; gas: bigint; deposit?: bigint }[]): Promise<{ hash: string; tx: any }> {
     const actions = this.functionCalls(calls);
     const once = () => this.withLane(async (lane) => {
       const nonce = await this.nonceOf(lane);
@@ -144,7 +144,7 @@ export class KeyPool {
     return this.functionCalls([{ method, args, gas }]);
   }
 
-  private functionCalls(calls: { method: string; args: unknown; gas: bigint }[]): Uint8Array {
+  private functionCalls(calls: { method: string; args: unknown; gas: bigint; deposit?: bigint }[]): Uint8Array {
     const w = new Writer();
     w.u32(calls.length);
     for (const c of calls) {
@@ -152,7 +152,7 @@ export class KeyPool {
       w.str(c.method);
       w.bytes(new TextEncoder().encode(JSON.stringify(c.args ?? {})));
       w.u64(c.gas);
-      w.u128(0n);
+      w.u128(c.deposit ?? 0n);
     }
     return w.finish();
   }

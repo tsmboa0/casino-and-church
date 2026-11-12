@@ -18,5 +18,14 @@ export function betDetail(game: string, outcome: any): string {
     const dealer = (outcome.dealer_cards ?? []).join(' ');
     return dealer ? `${player} v ${dealer}` : player;
   }
+  if (name === 'market') {
+    // reels = [lock price, close price], side = the player's call, color = the round's outcome
+    const [lock, close] = (outcome.reels ?? []) as string[];
+    const call = String(outcome.side ?? '').toUpperCase();
+    const res = String(outcome.color ?? '').toUpperCase();
+    if (res === 'VOID') return `BTC ${call} · VOID (refunded)`;
+    if (res === 'TIE') return `BTC ${call} · TIE $${lock} (refunded)`;
+    return `BTC ${call} · $${lock} → $${close}`;
+  }
   return name.toUpperCase();
 }

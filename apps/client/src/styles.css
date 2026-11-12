@@ -444,3 +444,8 @@ body:not(.playing) #labels { display: none; }
 .field.col input { width: 286px; }  /* the name input + dice button */
 .field input[type=password] { letter-spacing: 2px; }
 .field input::placeholder { letter-spacing: 0; color: rgba(255,240,210,.35); }
+/* the BTC Exchange marquee: the live price, green/red against the running round's lock */
+.sign.btc { display: flex; align-items: baseline; justify-content: center; gap: .35em; padding: .25em .4em; font-family: var(--f-cap); letter-spacing: .04em; white-space: nowrap;
+  color: #bff4ff; background: #03080c; box-shadow: 0 0 0 .2em #14101c, inset 0 0 0 .12em #0d4a5e, 0 0 1.1em rgba(61,214,255,.35); text-shadow: 0 0 .4em rgba(61,214,255,.8); }
+.sign.btc small { font-size: .62em; opacity: .7; } .sign.btc b { font-family: "Num", var(--f-cap); font-weight: 400; } .sign.btc i { font-style: normal; font-size: .7em; }
+.sign.btc.up { color: #3dffa0; text-shadow: 0 0 .4em rgba(61,255,160,.8); } .sign.btc.down { color: #ff6d86; text-shadow: 0 0 .4em rgba(255,77,109,.8); }

@@ -130,6 +130,22 @@ export class PreloadScene extends Phaser.Scene {
       r(26, 0, 12, 5, '#14101c'); r(27, 1, 10, 3, '#f5c542');                                                                   // the "VS" plate
       r(0, 34, 64, 2, 'rgba(0,0,0,0.35)');
     });
+    // ----- THE BTC EXCHANGE: a trading kiosk. Marquee on top (the live price is a DOM label over it), a candle chart,
+    //       a green UP and a red DOWN button, a cyan neon frame on a dark pedestal
+    mk('exchange_tex', 64, 56, c => {
+      const r = (x: number, y: number, w: number, h: number, f: string) => { c.fillStyle = f; c.fillRect(x, y, w, h); };
+      r(8, 48, 48, 8, '#14101c'); r(9, 48, 46, 6, '#1d2a33'); r(9, 48, 46, 1, '#2e4552'); r(6, 54, 52, 2, 'rgba(0,0,0,0.4)');   // pedestal
+      r(2, 0, 60, 50, '#14101c'); r(3, 1, 58, 48, '#0b1a24'); r(3, 1, 58, 1, '#3dd6ff'); r(3, 48, 58, 1, '#0d5a73');            // cabinet + neon
+      r(3, 1, 1, 48, '#1b6f8a'); r(60, 1, 1, 48, '#1b6f8a');
+      r(6, 3, 52, 11, '#14101c'); r(7, 4, 50, 9, '#04121a'); r(7, 4, 50, 1, '#0d4a5e');                                          // marquee (price label sits here)
+      r(6, 16, 52, 24, '#14101c'); r(7, 17, 50, 22, '#03080c');                                                                 // screen
+      for (let y = 20; y < 38; y += 4) r(8, y, 48, 1, '#0a1a22');                                                               // grid
+      const candles: [number, number, number, boolean][] = [[10, 30, 5, true], [14, 27, 6, true], [18, 29, 4, false], [22, 24, 7, true], [26, 26, 5, false], [30, 21, 6, true], [34, 23, 4, false], [38, 19, 6, true], [42, 22, 5, false], [46, 18, 6, true], [50, 20, 4, false]];
+      for (const [x, y, h, up] of candles) { r(x + 1, y - 2, 1, h + 4, up ? '#1f8a5a' : '#8a1f33'); r(x, y, 3, h, up ? '#3dffa0' : '#ff4d6d'); }
+      r(8, 25, 48, 1, 'rgba(255,210,74,0.55)');                                                                                 // the lock line
+      r(14, 41, 14, 6, '#14101c'); r(15, 42, 12, 4, '#19b36d'); r(19, 43, 4, 1, '#e8fff4'); r(20, 42, 2, 1, '#e8fff4');           // UP button
+      r(36, 41, 14, 6, '#14101c'); r(37, 42, 12, 4, '#d8344f'); r(41, 44, 4, 1, '#fff0f2'); r(42, 45, 2, 1, '#fff0f2');           // DOWN button
+    });
     // ----- a full-size craps table (the pack's one is far smaller than the other tables)
     mk('craps_tex', 128, 64, c => {
       const r = (x: number, y: number, w: number, h: number, f: string) => { c.fillStyle = f; c.fillRect(x, y, w, h); };

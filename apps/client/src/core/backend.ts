@@ -48,6 +48,38 @@ export interface HouseStats { playersOnline: number; inCasino: number; inChurch:
 export interface ChurchStats { treasury: number; tithes24h: number; candles24h: number; alms24h: number; blessingsPaid24h: number;
   blessingCapBps: number; candleFaithMilli: number; faithfulOnline: number }
 export interface LbRow { rank: number; name: string; wagered: number; net: number; you?: boolean }
+// ---- the BTC UP/DOWN market: one-minute rounds, priced by an OutLayer TEE oracle (contracts/realm/src/market.rs) ----
+export type MarketSide = 'up' | 'down';
+export type MarketOutcome = '' | 'up' | 'down' | 'tie' | 'void';
+export interface MarketRound {
+  epoch: number; phase: 'open' | 'live' | 'closed' | 'void';
+  /** ms, chain clock */
+  openAt: number; lockAt: number; lockedAt: number; closedAt: number;
+  /** USD, null until priced */
+  lockPrice: number | null; closePrice: number | null;
+  up: number; down: number; bets: number; outcome: MarketOutcome;
+}
+export interface MarketCrowdBet { betId: number; who: string; side: MarketSide; chips: number; mine: boolean }
+export interface MarketState {
+  enabled: boolean; epoch: number; pending: boolean; roundS: number; graceS: number;
+  /** total paid on a win, stake included (1.9 = stake x 1.9) */
+  payout: number; wagers: number[];
+  open: MarketRound | null; live: MarketRound | null; recent: MarketRound[];
+  /** bets in the open and live rounds, by epoch */
+  crowd: Record<number, MarketCrowdBet[]>;
+  /** BTC/USD spot for the chart (an exchange feed; the result is the oracle's price), and its recent history */
+  price: number | null; history: [number, number][];
+  /** the last price the oracle delivered on chain */
+  oraclePrice: number | null; oracleAt: number;
+  /** add to Date.now() to get the chain clock */
+  skew: number;
+  /** who prices it, for the footer */
+  oracle: string;
+}
+export interface MarketResult {
+  betId: number; side: MarketSide; outcome: Exclude<MarketOutcome, ''>; wager: number; payout: number; blessing: number;
+  lockPrice: number | null; closePrice: number | null; luckGain: number;
+}
 export interface Backend {
   readonly mode: 'mock' | 'chain';
   placeBet(r: BetReq): Promise<BetResult>;                       // resolves when the bet is SETTLED (reveal done)
@@ -105,6 +137,12 @@ export interface Backend {
   history?(): Promise<HistRow[]>;
   /** OPTIONAL: top players by chips wagered. Chain: GET /leaderboard. */
   leaderboard?(): Promise<{ rows: LbRow[]; demo: boolean }>;
+  /** OPTIONAL: the BTC UP/DOWN market. Chain: GET /market (the server's shared snapshot) */
+  market?(): Promise<MarketState>;
+  /** bet on the OPEN round `epoch`; resolves once the bet is on chain (the result comes when the round closes) */
+  marketBet?(epoch: number, side: MarketSide, chips: number): Promise<{ betId: number; tx?: string }>;
+  /** a settled market bet, or null while its round is still running */
+  marketResult?(betId: number): Promise<MarketResult | null>;
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -326,6 +364,72 @@ class MockBackend implements Backend {
   }
 
   async history() { return store.stats.history.slice(); }
+
+  // ---- BTC UP/DOWN (demo): a local random walk stands in for the oracle; same rounds, same 1.9x, same tie refund
+  private mk = { epoch: 0, rounds: new Map<number, MarketRound>(), bets: new Map<number, { betId: number; epoch: number; side: MarketSide; chips: number }>(), results: new Map<number, MarketResult>(), price: 73_400 + Math.random() * 400, at: Date.now(), history: [] as [number, number][], nextId: 900_000 };
+  private walk() {
+    const now = Date.now();
+    while (this.mk.at + 1000 <= now) {
+      this.mk.at += 1000;
+      this.mk.price = Math.max(1000, this.mk.price * (1 + (Math.random() - 0.5) * 0.0009));
+      this.mk.history.push([this.mk.at, Math.round(this.mk.price * 100) / 100]);
+    }
+    while (this.mk.history.length > 600) this.mk.history.shift();
+    return Math.round(this.mk.price * 100) / 100;
+  }
+  private mkTick() {
+    const ROUND = 60_000, now = Date.now(), price = this.walk(), m = this.mk;
+    const blank = (epoch: number, at: number): MarketRound => ({ epoch, phase: 'open', openAt: at, lockAt: at + ROUND, lockedAt: 0, closedAt: 0, lockPrice: null, closePrice: null, up: 0, down: 0, bets: 0, outcome: '' });
+    if (!m.epoch) { m.epoch = 1; m.rounds.set(1, blank(1, now)); }
+    for (let guard = 0; guard < 5; guard++) {
+      const open = m.rounds.get(m.epoch)!;
+      if (now < open.lockAt) break;
+      const live = m.rounds.get(m.epoch - 1);
+      if (live?.phase === 'live') {
+        live.closePrice = price; live.closedAt = now; live.phase = 'closed';
+        live.outcome = price > live.lockPrice! ? 'up' : price < live.lockPrice! ? 'down' : 'tie';
+        for (const b of [...m.bets.values()].filter((x) => x.epoch === live.epoch)) {
+          const won = b.side === live.outcome, refund = live.outcome === 'tie';
+          const payout = won ? b.chips * 1.9 : refund ? b.chips : 0;
+          if (payout) store.change({ chips: payout });
+          this.log('btc', b.chips, payout, `BTC ${b.side.toUpperCase()} · $${live.lockPrice!.toFixed(2)} → $${price.toFixed(2)}`);
+          const res: MarketResult = { betId: b.betId, side: b.side, outcome: live.outcome as MarketResult['outcome'], wager: b.chips, payout, blessing: 0, lockPrice: live.lockPrice, closePrice: price, luckGain: won || !refund ? 0.1 * b.chips : 0 };
+          m.results.set(b.betId, res); m.bets.delete(b.betId);
+          setTimeout(() => bus.emit('marketSettled', res), 0);
+        }
+      }
+      open.phase = 'live'; open.lockPrice = price; open.lockedAt = now;
+      m.epoch += 1; m.rounds.set(m.epoch, blank(m.epoch, now));
+      m.rounds.delete(m.epoch - 14);
+    }
+  }
+  async market(): Promise<MarketState> {
+    this.mkTick();
+    const m = this.mk, open = m.rounds.get(m.epoch)!, live = m.rounds.get(m.epoch - 1);
+    const recent = [...m.rounds.values()].filter((r) => r.phase === 'closed').sort((a, b) => b.epoch - a.epoch).slice(0, 12);
+    const crowd: MarketState['crowd'] = {};
+    for (const b of m.bets.values()) (crowd[b.epoch] ??= []).push({ betId: b.betId, who: 'You', side: b.side, chips: b.chips, mine: true });
+    return {
+      enabled: true, epoch: m.epoch, pending: false, roundS: 60, graceS: 45, payout: 1.9, wagers: [1, 2, 5, 10],
+      open: { ...open }, live: live?.phase === 'live' ? { ...live } : null, recent: recent.map((r) => ({ ...r })), crowd,
+      price: this.walk(), history: m.history.slice(-300), oraclePrice: live?.lockPrice ?? null, oracleAt: live?.lockedAt ?? 0, skew: 0,
+      oracle: 'demo price (offline)',
+    };
+  }
+  async marketBet(epoch: number, side: MarketSide, chips: number) {
+    this.mkTick();
+    const open = this.mk.rounds.get(this.mk.epoch)!;
+    if (epoch !== this.mk.epoch || Date.now() >= open.lockAt) fail('round_locked', 'Betting on that round has closed. Try the next one.');
+    if ([...this.mk.bets.values()].some((b) => b.epoch === epoch)) fail('already_bet', 'You already have a bet on this round.');
+    if (store.eco.chips < chips) fail('no_chips', 'Not enough chips.');
+    await sleep(500);
+    store.change({ chips: -chips });
+    const betId = ++this.mk.nextId;
+    this.mk.bets.set(betId, { betId, epoch, side, chips });
+    open.bets += 1; if (side === 'up') open.up += chips; else open.down += chips;
+    return { betId };
+  }
+  async marketResult(betId: number) { this.mkTick(); return this.mk.results.get(betId) ?? null; }
 
   // ---- campaigns (demo): the same rules as the contract, kept in memory; the Church "oracle" waits 5 s
   private camps: CampaignRow[] = [

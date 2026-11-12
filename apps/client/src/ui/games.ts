@@ -2,7 +2,10 @@ import './games.css';
 import { store, clearProfile } from '../core/state';
 import { bus, type PanelKind } from '../core/bus';
 import { audio } from '../core/audio';
-import { backend, BackendError, type BjState, type AgentDecision, type AgentId, type AgentProof, type CampaignRow, type RealmEvent } from '../core/backend';
+import {
+  backend, BackendError, type BjState, type AgentDecision, type AgentId, type AgentProof, type CampaignRow, type RealmEvent,
+  type MarketState, type MarketSide, type MarketResult, type MarketCrowdBet,
+} from '../core/backend';
 import { CAMPAIGN_LIMITS, campaignCost, campaignProblem, type NewCampaign } from '@cnc/shared';
 import { verifyProof, SAMPLE_PROOF } from './aiverify';
 import { spriteCss } from './onboarding';
@@ -1042,6 +1045,206 @@ function board(root: Root, close: () => void) {
   void render();
 }
 
+// ---------------------------------------------------------------------------------------------- BTC EXCHANGE (UP/DOWN)
+const usd = (n: number | null | undefined, dp = 2) => (n == null ? '—' : `$${n.toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp })}`);
+const clock = (ms: number) => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const ARROW = { up: '&#9650;', down: '&#9660;' } as const;
+/** a market result line, for the result card and the toast */
+const marketLine = (r: MarketResult) => r.outcome === 'void'
+  ? `No price in time: your ${r.wager} chip${r.wager === 1 ? '' : 's'} came back.`
+  : r.outcome === 'tie' ? `BTC held at ${usd(r.lockPrice)}: a tie, your bet came back.`
+  : `BTC ${r.outcome === 'up' ? 'rose' : 'fell'} ${usd(r.lockPrice)} → ${usd(r.closePrice)}`;
+/** shows a settled market bet as the big result card */
+function marketVerdict(root: Root, r: MarketResult) {
+  const pay = `+${r.payout % 1 ? r.payout.toFixed(1) : r.payout}`;
+  if (r.outcome === 'void' || r.outcome === 'tie') showResult(root, 'push', 'BET RETURNED', pay, marketLine(r));
+  else if (r.payout > 0) showResult(root, 'win', 'YOU CALLED IT!', pay, `${marketLine(r)}${r.blessing ? ` · Blessing +${r.blessing}` : ''}`);
+  else showResult(root, 'lose', 'WRONG CALL', r.wager, marketLine(r));
+}
+// a round can end while the panel is closed: say so on the floor
+bus.on('marketSettled', (r: MarketResult) => {
+  if (document.querySelector('.mk')) return;
+  const head = r.outcome === 'void' || r.outcome === 'tie' ? 'BTC round: bet returned' : r.payout > 0 ? `BTC ${r.outcome.toUpperCase()}! You won ${r.payout % 1 ? r.payout.toFixed(1) : r.payout} chips` : `BTC ${r.outcome.toUpperCase()}: your ${r.side.toUpperCase()} call lost`;
+  bus.emit('toast', head);
+});
+
+function market(root: Root, close: () => void) {
+  if (!backend.market) { shell(root, close, 'casino', 'BTC EXCHANGE', '<p class="mk-off">The exchange is closed in this mode.</p>'); return; }
+  let st: MarketState | null = null, side: MarketSide = 'up', bet = 1, busy = false, alive = true, timer = 0, frame = 0;
+  const shown = new Set<number>();          // results already shown in this panel
+  shell(root, close, 'market' as any, 'BTC EXCHANGE', `
+  <div class="mk">
+    <div class="mk-l">
+      <div class="mk-quote"><div><small>BTC / USD</small><b id="px">—</b></div><div class="mk-chg" id="chg"></div></div>
+      <div class="mk-chart"><canvas id="cv"></canvas><span class="mk-note" id="cvn">connecting to the price feed…</span></div>
+      <div class="mk-recent" id="recent"></div>
+    </div>
+    <div class="mk-r">
+      <div class="mk-box live" id="live"></div>
+      <div class="mk-box open" id="open">
+        <div class="mk-h"><span id="oh">NEXT ROUND</span><b id="ot"></b></div>
+        <div class="mk-sides">
+          <button class="mk-side up sel" data-s="up"><b>${ARROW.up} UP</b><small id="pu"></small></button>
+          <button class="mk-side down" data-s="down"><b>${ARROW.down} DOWN</b><small id="pd"></small></button>
+        </div>
+        <div id="chipwrap"></div>
+        <button class="g-go wide" id="go"><span>PLACE BET</span></button>
+        <div class="mk-mine" id="mine" hidden></div>
+      </div>
+      <div class="mk-crowd" id="crowd"></div>
+    </div>
+    <div class="mk-foot" id="foot">One-minute rounds. Call where BTC goes from the lock price to the close price. A tie returns your bet.</div>
+  </div>`);
+  const $px = $(root, '#px'), $chg = $(root, '#chg'), cv = $<HTMLCanvasElement>(root, '#cv'), go = $<HTMLButtonElement>(root, '#go');
+  const shutdown = () => { alive = false; window.clearTimeout(timer); cancelAnimationFrame(frame); bus.off('marketSettled', onSettled); };
+  $(root, '[data-close]').addEventListener('click', shutdown);
+  root.closest('#modal')?.addEventListener('pointerdown', (e) => { if (e.target === e.currentTarget) shutdown(); }, { once: true });
+
+  const onSettled = (r: MarketResult) => { if (!alive || shown.has(r.betId)) return; shown.add(r.betId); setBal(root); marketVerdict(root, r); };
+  bus.on('marketSettled', onSettled);
+  $$(root, '.mk-side').forEach(b => b.addEventListener('click', () => {
+    if (busy) return; side = b.dataset.s as MarketSide; $$(root, '.mk-side').forEach(x => x.classList.toggle('sel', x === b)); audio.play('hit', 0.25); vib(4);
+  }));
+
+  const now = () => Date.now() + (st?.skew ?? 0);
+  /** the open round is past its lock with nothing at stake: the next bet starts a fresh 60 s window */
+  const idle = (s: MarketState) => !s.open || (now() >= s.open.lockAt && !s.open.bets && !(s.live && s.live.bets) && !s.pending);
+  /** my bets placed from this panel: the shared snapshot shows them a second or two later */
+  const placed = new Map<number, MarketCrowdBet>();
+  const mineIn = (s: MarketState, epoch?: number) => (epoch ? s.crowd[epoch]?.find(b => b.mine) ?? placed.get(epoch) : undefined);
+  let chipsFor = '';
+  const paint = () => {
+    const s = st; if (!s) return;
+    // ---- price + change against the live round's lock price
+    const p = s.price ?? s.oraclePrice;
+    $px.textContent = usd(p);
+    const ref = s.live?.lockPrice ?? null;
+    if (p != null && ref != null) {
+      const d = p - ref, cls = d > 0 ? 'up' : d < 0 ? 'down' : '';
+      $chg.className = `mk-chg ${cls}`;
+      $chg.innerHTML = `<small>VS LOCK ${usd(ref)}</small><b>${d > 0 ? ARROW.up : d < 0 ? ARROW.down : '='} ${usd(Math.abs(d))}</b>`;
+    } else { $chg.className = 'mk-chg'; $chg.innerHTML = '<small>NO ROUND RUNNING</small><b>&nbsp;</b>'; }
+    // ---- the live round
+    const L = s.live, lv = $(root, '#live');
+    if (!L) lv.innerHTML = `<div class="mk-h"><span>LIVE ROUND</span><b></b></div><p class="mk-dim">No round is running. Bet on the next one below.</p>`;
+    else {
+      const left = (s.open?.lockAt ?? 0) - now(), my = mineIn(s, L.epoch);
+      const winning = my && p != null && L.lockPrice != null ? (p === L.lockPrice ? 'even' : (p > L.lockPrice) === (my.side === 'up') ? 'ahead' : 'behind') : '';
+      lv.innerHTML = `<div class="mk-h"><span>LIVE #${L.epoch}</span><b>${s.pending || left <= 0 ? '<i class="mk-spin"></i> PRICING' : `ENDS ${clock(left)}`}</b></div>
+        <div class="mk-row"><span>LOCKED AT</span><b>${usd(L.lockPrice)}</b></div>
+        <div class="mk-row"><span>${ARROW.up} ${fmt(L.up)} &middot; ${ARROW.down} ${fmt(L.down)}</span><b>${L.bets} BET${L.bets === 1 ? '' : 'S'}</b></div>
+        ${my ? `<div class="mk-you ${winning}">YOU: ${ARROW[my.side]} ${my.side.toUpperCase()} ${my.chips} &middot; ${winning === 'ahead' ? 'WINNING' : winning === 'behind' ? 'LOSING' : 'EVEN'}</div>` : ''}`;
+    }
+    // ---- the open round: countdown, sides, chips, bet button
+    const O = s.open, my = mineIn(s, O?.epoch);
+    const isIdle = idle(s), lockLeft = (O?.lockAt ?? 0) - now();
+    $(root, '#oh').textContent = O ? `NEXT ROUND #${O.epoch}` : 'NEXT ROUND';
+    $(root, '#ot').innerHTML = !s.enabled ? 'CLOSED' : !O || isIdle ? 'STARTS ON THE FIRST BET' : lockLeft > 0 ? `BETS CLOSE ${clock(lockLeft)}` : '<i class="mk-spin"></i> LOCKING';
+    $(root, '#pu').textContent = `pays ${s.payout}× · pool ${fmt(O?.up ?? 0)}`;
+    $(root, '#pd').textContent = `pays ${s.payout}× · pool ${fmt(O?.down ?? 0)}`;
+    const key = s.wagers.join(',');
+    if (key !== chipsFor) {
+      chipsFor = key; if (!s.wagers.includes(bet)) bet = s.wagers[0];
+      $(root, '#chipwrap').innerHTML = `<div class="g-lab">YOUR BET (CHIPS)</div>${chipRow(bet, s.wagers, 'mkchips')}`;
+      wireChips(root, v => (bet = v), () => busy, 'mkchips');
+    }
+    // a market that never ran has no round yet: the first bet opens round 1
+    const open = s.enabled && (isIdle || lockLeft > 0) && !my;
+    go.disabled = busy || !open;
+    $$(root, '.mk-side').forEach(b => ((b as HTMLButtonElement).disabled = busy || !open));
+    const mine = $(root, '#mine');
+    mine.hidden = !my;
+    if (my) mine.innerHTML = `YOUR BET: <b>${ARROW[my.side]} ${my.side.toUpperCase()} ${my.chips}</b> &middot; ${lockLeft > 0 ? `locks in ${clock(lockLeft)}` : 'locking now'}`;
+    go.hidden = !!my;
+    // ---- the crowd: everybody's calls in the open and live rounds
+    const crowd = [...(O ? (s.crowd[O.epoch] ?? []).map(b => ({ ...b, r: 'NEXT' })) : []), ...(L ? (s.crowd[L.epoch] ?? []).map(b => ({ ...b, r: 'LIVE' })) : [])];
+    $(root, '#crowd').innerHTML = crowd.length
+      ? `<div class="g-lab">THE CROWD</div>${crowd.slice(0, 12).map(b => `<div class="mk-cr ${b.side} ${b.mine ? 'me' : ''}"><span>${esc(b.who)}</span><em>${b.r}</em><b>${ARROW[b.side]} ${b.chips}</b></div>`).join('')}`
+      : '<div class="g-lab">THE CROWD</div><p class="mk-dim">Nobody has called this one yet.</p>';
+    // ---- recent outcomes
+    $(root, '#recent').innerHTML = s.recent.slice(0, 10).map(r => `<i class="mk-pill ${r.outcome || 'none'}" title="#${r.epoch}">${r.outcome === 'up' ? ARROW.up : r.outcome === 'down' ? ARROW.down : r.outcome === 'tie' ? '=' : '&times;'}</i>`).join('') || '<span class="mk-dim">No rounds yet</span>';
+    $(root, '#foot').innerHTML = backend.mode === 'chain'
+      ? `${s.roundS}-second rounds &middot; each lock and close price comes from the <b>${s.oracle}</b> (a median of several exchanges) &middot; settled on NEAR &middot; a tie returns your bet`
+      : `${s.roundS}-second rounds &middot; <b>demo prices</b> (offline) &middot; on the live game the OutLayer TEE oracle prices every round on NEAR`;
+  };
+
+  // ---- the chart: the last five minutes of BTC, the live round's lock price as a dashed line
+  const draw = () => {
+    if (!alive) return;
+    frame = requestAnimationFrame(draw);
+    const s = st; if (!s) return;
+    const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+    if (!w || !h) return;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+    const c = cv.getContext('2d')!; c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
+    // the window fits the data: at least a minute, at most five
+    const t1 = Date.now(), first = s.history[0]?.[0] ?? t1, t0 = Math.max(t1 - 5 * 60_000, Math.min(first, t1 - 60_000));
+    const pts = s.history.filter(([t]) => t >= t0 - 5_000);
+    $(root, '#cvn').hidden = pts.length > 1;
+    if (pts.length < 2) return;
+    const lock = s.live?.lockPrice ?? null;
+    let lo = Math.min(...pts.map(q => q[1]), lock ?? Infinity), hi = Math.max(...pts.map(q => q[1]), lock ?? -Infinity);
+    const pad = Math.max((hi - lo) * 0.15, hi * 0.0002); lo -= pad; hi += pad;
+    const X = (t: number) => ((t - t0) / (t1 - t0)) * (w - 46), Y = (v: number) => h - 8 - ((v - lo) / (hi - lo)) * (h - 16);
+    // grid
+    c.strokeStyle = 'rgba(120,200,255,.08)'; c.lineWidth = 1;
+    for (let i = 1; i < 4; i++) { const y = Math.round((h / 4) * i) + 0.5; c.beginPath(); c.moveTo(0, y); c.lineTo(w - 46, y); c.stroke(); }
+    // price line
+    const last = pts[pts.length - 1][1];
+    const col = lock == null ? '#7fd8ff' : last >= lock ? '#3dffa0' : '#ff4d6d';
+    const grad = c.createLinearGradient(0, 0, 0, h); grad.addColorStop(0, col + '55'); grad.addColorStop(1, col + '00');
+    c.beginPath(); pts.forEach(([t, v], i) => (i ? c.lineTo(X(t), Y(v)) : c.moveTo(X(t), Y(v))));
+    c.lineTo(X(pts[pts.length - 1][0]), h); c.lineTo(X(pts[0][0]), h); c.closePath(); c.fillStyle = grad; c.fill();
+    c.beginPath(); pts.forEach(([t, v], i) => (i ? c.lineTo(X(t), Y(v)) : c.moveTo(X(t), Y(v)))); c.strokeStyle = col; c.lineWidth = 2; c.stroke();
+    // the lock line
+    if (lock != null) {
+      const y = Math.round(Y(lock)) + 0.5;
+      c.setLineDash([4, 4]); c.strokeStyle = '#ffd24a'; c.lineWidth = 1; c.beginPath(); c.moveTo(0, y); c.lineTo(w - 46, y); c.stroke(); c.setLineDash([]);
+      c.fillStyle = '#ffd24a'; c.font = '9px "Num", monospace'; c.fillText('LOCK', w - 42, y + 3);
+    }
+    // the latest price, pulsing
+    const lx = X(pts[pts.length - 1][0]), ly = Y(last), pulse = 3 + Math.sin(t1 / 180) * 1.5;
+    c.fillStyle = col; c.beginPath(); c.arc(lx, ly, pulse, 0, Math.PI * 2); c.fill();
+    c.fillStyle = 'rgba(200,230,255,.7)'; c.font = '9px "Num", monospace';
+    c.fillText(Math.round(hi).toLocaleString('en-US'), w - 42, 10); c.fillText(Math.round(lo).toLocaleString('en-US'), w - 42, h - 4);
+  };
+
+  const poll = async () => {
+    if (!root.isConnected) shutdown();      // the panel went away (closed some other way)
+    if (!alive) return;
+    try {
+      st = await backend.market!();
+      paint();
+      // a bet of mine in a round that has finished, whose result I have not seen (the push may have been missed)
+      for (const r of st.recent.slice(0, 3)) {
+        const mine = (prevCrowd[r.epoch] ?? []).find(b => b.mine) ?? placed.get(r.epoch);
+        if (mine && !shown.has(mine.betId)) { const res = await backend.marketResult?.(mine.betId); if (res) onSettled(res); }
+      }
+      for (const [e, list] of Object.entries(st.crowd)) prevCrowd[Number(e)] = list;
+    } catch (e) {
+      $(root, '#ot').textContent = e instanceof BackendError ? e.message.toUpperCase() : 'RECONNECTING...';
+    }
+    if (alive) timer = window.setTimeout(poll, 1000);
+  };
+  const prevCrowd: Record<number, MarketCrowdBet[]> = {};
+  void poll();
+  frame = requestAnimationFrame(draw);
+
+  go.addEventListener('click', async () => {
+    const s = st; if (busy || !s?.enabled || !backend.marketBet || !canCover(root, bet)) return;
+    busy = true; hideResult(root); vib(10); audio.play('hit', 0.4);
+    try {
+      const epoch = s.open?.epoch ?? 1;
+      const r = await pending(go, () => backend.marketBet!(epoch, side, bet));
+      placed.set(epoch, { betId: r.betId, who: 'You', side, chips: bet, mine: true });
+      setBal(root);
+      bus.emit('toast', `${side.toUpperCase()} ${bet} on round #${epoch}. Good luck!`);
+      st = await backend.market!().catch(() => st); paint();
+    } catch (e) { oops(root, e); }
+    finally { busy = false; paint(); }
+  });
+}
+
 // ---------------------------------------------------------------------------------------------- TALK TO A HOST
 const chatLogs: Record<AgentId, { who: 'host' | 'you'; text: string; dec?: AgentDecision; proof?: AgentProof; off?: boolean; wait?: boolean; typed?: boolean }[]> = { fortuna: [], nakamoto: [] };
 function hostChat(root: Root, close: () => void, agent: AgentId) {
@@ -1184,7 +1387,7 @@ export function openSettings(m: HTMLElement, close: () => void, act: SettingsAct
 
 // ---------------------------------------------------------------------------------------------- registry
 const GAMES: Partial<Record<PanelKind, (root: Root, close: () => void, id?: string) => void>> = {
-  monitor, ledger, board,
+  monitor, ledger, board, market,
   chat: (root, close, id) => hostChat(root, close, id === 'nakamoto' ? 'nakamoto' : 'fortuna'),
   slots, coinflip, dice, roulette, blackjack, cashier, offering, candles, missions, altar, confessional, wheel: fortune,
   harmony: (root, close) => harmony(root, close),

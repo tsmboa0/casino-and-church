@@ -4,6 +4,7 @@ import { bus } from '../core/bus';
 import {
   BackendError, type AgentDecision, type AgentId, type AgentProof, type Backend, type BetReq, type BetResult, type BjState,
   type CampaignRow, type ChurchStats, type HouseStats, type RealmEvent, type WheelResult,
+  type MarketRound, type MarketSide, type MarketState, type MarketResult,
 } from '../core/backend';
 import { QUESTS, PARAMS, handTotal, setTableBets } from '../core/rules';
 import { store, type HistRow, type Plot } from '../core/state';
@@ -62,6 +63,8 @@ export class ChainBackend implements Backend {
         if (d.applied && (d.action === 'set_max_bet')) void this.loadTableSoon();
       },
       events_changed: () => bus.emit('eventsChanged'),
+      // a BTC round closed with one of my bets in it: fetch the result, update the chips, tell whoever is showing it
+      bet_settled: (d: { bet_id?: number; game?: string }) => { if (d?.game === 'Market' && d.bet_id) void this.marketSettled(Number(d.bet_id)); },
     });
   }
 
@@ -116,6 +119,77 @@ export class ChainBackend implements Backend {
     if (res.status === 429) return { answer: String(body.message || 'Enough questions for now. Come back later.'), relevant: true };
     if (!res.ok) throw new BackendError(String(body.error || 'bad_args'), body.message || 'The host did not answer.');
     return body as { answer: string; relevant: boolean; proof?: AgentProof };
+  }
+
+  // ---- the BTC UP/DOWN market: the server keeps one snapshot of the rounds for everybody; bets are relayed ----
+  async market(): Promise<MarketState> {
+    const t0 = Date.now();
+    const s = await this.get<any>('/market');
+    const t1 = Date.now();
+    const me = hasWallet() ? wallet.accountId : '';
+    const v = s.view ?? {};
+    const ms = (ns: string | number | undefined) => Number(BigInt(ns ?? 0) / 1_000_000n);
+    const usd = (cents: number) => (cents ? cents / 100 : null);
+    const round = (r: any): MarketRound => ({
+      epoch: r.epoch, phase: r.phase, openAt: ms(r.open_ns), lockAt: ms(r.lock_ns), lockedAt: ms(r.locked_at_ns), closedAt: ms(r.closed_at_ns),
+      lockPrice: usd(r.lock_price), closePrice: usd(r.close_price), up: this.chips(r.up), down: this.chips(r.down), bets: r.bets, outcome: r.outcome ?? '',
+    });
+    const crowd: MarketState['crowd'] = {};
+    for (const [epoch, list] of Object.entries(s.bets ?? {}) as [string, any[]][]) {
+      crowd[Number(epoch)] = list.map((b) => ({
+        betId: b.bet_id, side: b.side, chips: this.chips(b.wager), mine: b.player === me,
+        who: b.player === me ? 'You' : b.name || (b.player.length > 20 ? `${b.player.slice(0, 5)}…${b.player.slice(-4)}` : b.player),
+      }));
+    }
+    // the chain clock: block time when the server read it, moved on by the time since (half the round trip)
+    const chainAtFetch = ms(v.now_ns) + (Number(s.server_now ?? s.at) - Number(s.at ?? s.server_now));
+    const skew = chainAtFetch - (t0 + t1) / 2;
+    return {
+      enabled: Boolean(v.enabled), epoch: Number(v.epoch ?? 0), pending: Boolean(v.pending), roundS: Number(v.round_s ?? 60), graceS: Number(v.grace_s ?? 45),
+      payout: Number(v.payout_bps ?? 19000) / 10000, wagers: (v.wagers ?? [1, 2, 5, 10]).map(Number),
+      open: v.open ? round(v.open) : null, live: v.live ? round(v.live) : null, recent: (v.recent ?? []).map(round),
+      crowd, price: s.price?.usd ?? null, history: s.history ?? [],
+      oraclePrice: v.last_price ? v.last_price / 100 : null, oracleAt: ms(v.last_price_ns),
+      skew: Number.isFinite(skew) && Math.abs(skew) < 600_000 ? skew : 0,
+      oracle: 'OutLayer TEE oracle',
+    };
+  }
+
+  async marketBet(epoch: number, side: MarketSide, chips: number) {
+    await this.ensureWelcome().catch(() => { /* the bet reports a real problem itself */ });
+    const { tx, done } = await this.relayed('market_bet', { epoch, side, wager: (BigInt(chips) * CHIP).toString() }, 30n * TGAS);
+    const ev = txEvents(done).find((e) => e.event === 'market_bet')?.data;
+    const betId = Number(ev?.bet_id ?? 0);
+    if (!betId) throw new BackendError('bad_args', 'The bet did not land.');
+    this.marketPending.add(betId);
+    store.eco.chips = Math.max(0, store.eco.chips - chips); store.emit();
+    void this.refresh().catch(() => { /* the next action refreshes */ });
+    return { betId, tx };
+  }
+
+  async marketResult(betId: number): Promise<MarketResult | null> {
+    if (!hasWallet()) return null;
+    const session = await this.session();
+    dropView(this.contract, 'get_bet_result');
+    const r = await viewCall(this.contract, 'get_bet_result', { account_id: session.accountId, bet_id: betId }, 'optimistic') as BetResultView | null;
+    if (!r) return null;
+    const o = (r.outcome ?? {}) as { reels?: string[]; side?: string; color?: string };
+    const price = (s?: string) => (s && Number(s) > 0 ? Number(s) : null);
+    return {
+      betId, side: o.side === 'down' ? 'down' : 'up', outcome: (o.color as MarketResult['outcome']) || 'void',
+      wager: this.chips(r.wager), payout: Number(BigInt(r.payout) * 100n / CHIP) / 100, blessing: this.chips(r.blessing ?? '0'),
+      lockPrice: price(o.reels?.[0]), closePrice: price(o.reels?.[1]), luckGain: Number(r.luck_gain_milli ?? 0) / 1000,
+    };
+  }
+
+  /** my market bets whose result has not been shown yet */
+  private marketPending = new Set<number>();
+  private async marketSettled(betId: number) {
+    if (!this.marketPending.has(betId)) return;
+    this.marketPending.delete(betId);
+    const res = await this.marketResult(betId).catch(() => null);
+    await this.refresh().catch(() => { /* the next action refreshes */ });
+    if (res) bus.emit('marketSettled', res);
   }
 
   private visualDecay() {

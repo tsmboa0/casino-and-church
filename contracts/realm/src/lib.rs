@@ -11,6 +11,7 @@ mod games;
 mod hosts;
 mod ledger;
 mod machines;
+mod market;
 mod mt;
 mod params;
 mod player;
@@ -62,6 +63,8 @@ pub struct Realm {
     pub hosts: hosts::HostState,
     /// v3: Church campaigns (appended last so older state migrates by appending)
     pub camp: campaigns::CampaignState,
+    /// v4: the BTC UP/DOWN market (appended last, like `camp`)
+    pub market: market::MarketState,
 }
 
 #[near]
@@ -115,6 +118,7 @@ impl Realm {
             bj: LookupMap::new(b"j"),
             hosts: hosts::HostState::new(agent.clone()),
             camp: campaigns::CampaignState::new(),
+            market: market::MarketState::new(),
         }
     }
 
@@ -125,7 +129,7 @@ impl Realm {
     pub fn migrate(priest: Option<AccountId>) -> Self {
         let raw = env::storage_read(b"STATE").unwrap_or_else(|| env::panic_str("bad_args"));
         let mut state = migrate_bytes(&raw, priest);
-        state.version = state.version.max(3);
+        state.version = state.version.max(4);
         state
     }
 
@@ -314,6 +318,45 @@ impl Realm {
         self.campaigns_view(account_id)
     }
 
+    // ---- BTC UP/DOWN market (market.rs) ----
+    pub fn market_configure(&mut self, config: market::MarketConfig) {
+        self.market_configure_inner(config);
+    }
+
+    /// `side` is "up" or "down". Bets close at the round's lock time. Returns the bet id.
+    pub fn market_bet(&mut self, epoch: u64, side: String, wager: U128) -> u64 {
+        let s = match side.as_str() { "up" | "UP" => market::UP, "down" | "DOWN" => market::DOWN, _ => 0 };
+        self.market_bet_inner(epoch, s, wager.0)
+    }
+
+    /// Dealer, at a round's lock time: requests one OutLayer price (attach `fee`; the unused part is refunded).
+    /// Anyone, once the price is overdue: voids the unpriced rounds so every stake is refunded.
+    #[payable]
+    pub fn market_tick(&mut self) -> near_sdk::PromiseOrValue<bool> {
+        match self.market_tick_inner() {
+            Some(p) => near_sdk::PromiseOrValue::Promise(p),
+            None => near_sdk::PromiseOrValue::Value(false),
+        }
+    }
+
+    #[private]
+    pub fn on_market_price(&mut self, epoch: u64, requested_ns: near_sdk::json_types::U64) {
+        self.on_market_price_inner(epoch, requested_ns.0);
+    }
+
+    /// pays queued market bets; anyone may call it
+    pub fn market_settle(&mut self, limit: u32) -> u32 {
+        self.settle_market(limit.clamp(1, 40))
+    }
+
+    pub fn get_market(&self, account_id: Option<AccountId>) -> market::MarketView {
+        self.market_view(account_id)
+    }
+
+    pub fn get_market_bets(&self, epoch: u64, from: Option<u32>, limit: Option<u32>) -> Vec<market::RoundBetView> {
+        self.market_bets_view(epoch, from.unwrap_or(0), limit.unwrap_or(100))
+    }
+
     /// admin: take a machine off a plot (refunds its bankroll to the deed owner, burns the deed)
     pub fn release_plot(&mut self, plot: u8) {
         self.release_plot_inner(plot);
@@ -370,31 +413,44 @@ impl Realm {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod market_tests;
 
 /// Decode stored state, upgrading a v1 layout (no `hosts`) by appending a fresh `HostState`.
 pub(crate) fn migrate_bytes(raw: &[u8], priest: Option<AccountId>) -> Realm {
     use near_sdk::borsh;
-    if let Ok(mut state) = borsh::from_slice::<Realm>(raw) {
-        if let Some(p) = priest {
+    let enc = |v: Vec<u8>| v;
+    let market = enc(borsh::to_vec(&market::MarketState::new()).unwrap_or_else(|_| env::panic_str("bad_args")));
+    let camp = enc(borsh::to_vec(&campaigns::CampaignState::new()).unwrap_or_else(|_| env::panic_str("bad_args")));
+    let fix = |mut state: Realm| {
+        if let Some(p) = priest.clone() {
             state.hosts.priest = p;
         }
-        return state;
+        state
+    };
+    // v4 (current)
+    if let Ok(state) = borsh::from_slice::<Realm>(raw) {
+        return fix(state);
     }
-    let camp = borsh::to_vec(&campaigns::CampaignState::new()).unwrap_or_else(|_| env::panic_str("bad_args"));
-    // v2 (hosts, no campaigns): append the campaign state
+    // v3 (campaigns, no market)
+    let mut v3 = raw.to_vec();
+    v3.extend(&market);
+    if let Ok(state) = borsh::from_slice::<Realm>(&v3) {
+        return fix(state);
+    }
+    // v2 (hosts, no campaigns)
     let mut v2 = raw.to_vec();
     v2.extend(&camp);
-    if let Ok(mut state) = borsh::from_slice::<Realm>(&v2) {
-        if let Some(p) = priest {
-            state.hosts.priest = p;
-        }
-        return state;
+    v2.extend(&market);
+    if let Ok(state) = borsh::from_slice::<Realm>(&v2) {
+        return fix(state);
     }
-    // v1 (neither): append both
+    // v1 (none of them)
     let placeholder: AccountId = env::current_account_id();
     let mut bytes = raw.to_vec();
     bytes.extend(borsh::to_vec(&hosts::HostState::new(placeholder)).unwrap_or_else(|_| env::panic_str("bad_args")));
     bytes.extend(&camp);
+    bytes.extend(&market);
     let mut state: Realm = borsh::from_slice(&bytes).unwrap_or_else(|_| env::panic_str("bad_args"));
     state.hosts.priest = priest.unwrap_or_else(|| state.roles.agent.clone());
     state

@@ -9,6 +9,7 @@ import type { Store } from '../db/store.ts';
 import { HttpError } from '../http.ts';
 import type { Hub } from '../indexer/hub.ts';
 import type { Dealer } from '../dealer/dealer.ts';
+import type { MarketKeeper } from '../market/keeper.ts';
 import { acceptRelay } from '../relayer/relay.ts';
 import type { SignedDelegate } from '@cnc/shared';
 import type { Hosts } from '../agent/service.ts';
@@ -27,6 +28,8 @@ export interface AppDeps {
   dealer?: Dealer;
   agents?: Hosts;
   activity?: Activity;
+  /** the BTC UP/DOWN market keeper (market/keeper.ts) */
+  market?: MarketKeeper;
   rpcEndpoint?: () => string;
   /** raw JSON-RPC to the configured NEAR endpoint(s), for the /rpc proxy */
   rpcCall?: (method: string, params: unknown) => Promise<unknown>;
@@ -105,6 +108,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       relayer_low: BigInt(relayerBalance) < RELAYER_RESERVE,
       rpc: deps.rpcEndpoint?.() ?? null,
       agents: deps.agents?.status() ?? null,
+      market: deps.market ? { ...deps.market.status, enabled: Boolean(deps.market.snapshot?.view?.enabled), epoch: deps.market.snapshot?.view?.epoch ?? 0 } : null,
     };
   }
 
@@ -340,6 +344,16 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     }
   });
 
+  // ---- BTC UP/DOWN market: one shared snapshot (rounds, bets, BTC chart) so browsers never poll the chain for it
+  app.get('/market', async (_req, reply) => {
+    if (!deps.market) throw new HttpError(503, 'market_closed', 'The market is not running on this server.');
+    deps.market.viewer();
+    const snap = deps.market.snapshot;
+    if (!snap) throw new HttpError(503, 'market_closed', 'The market is warming up. Try again in a moment.');
+    reply.header('cache-control', 'no-store');
+    return { ...snap, server_now: Date.now() };
+  });
+
   app.post('/relay', async (req) => {
     const body = req.body as { signed_delegate?: string; wait?: boolean };
     if (!body?.signed_delegate) throw new HttpError(400, 'bad_args', 'Missing signed_delegate.');
@@ -355,6 +369,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       observe: (sender, method, args) => {
         deps.activity?.record(sender, method, args);
         if (method === 'place_bet' || method === 'blackjack_act') { betMethod = true; deps.dealer?.nudge(); }   // wake the dealer: a bet is on its way
+        if (method === 'market_bet') deps.market?.nudge();
       },
     });
     // wait: true: the server watches the transaction until it has executed and returns the outcome in this response.

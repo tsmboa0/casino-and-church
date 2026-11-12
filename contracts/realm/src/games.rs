@@ -19,6 +19,8 @@ pub enum GameKind {
     Harmony,
     /// Single-deck blackjack. Settled by `blackjack_show`, not by `resolve`.
     Blackjack,
+    /// BTC UP/DOWN rounds (market.rs). Never placed through `place_bet`; settled by the oracle price.
+    Market,
 }
 
 pub fn parse_game(s: &str) -> GameKind {
@@ -89,6 +91,7 @@ pub fn max_base_payout(game: GameKind, wager: u128, chip: u128) -> u128 {
         GameKind::Harmony => 1_500 * chip,
         // A doubled hand can return 4x the original wager (1:1 on twice the stake).
         GameKind::Blackjack => whole_chips(wager, chip) * 4 * chip,
+        GameKind::Market => 0,
     }
 }
 
@@ -119,7 +122,7 @@ pub fn resolve(game: GameKind, draws: &[u32; 8], pick: u8, wager: u128, chip: u1
                 ..empty()
             }
         }
-        GameKind::Blackjack => empty(),
+        GameKind::Blackjack | GameKind::Market => empty(),
     }
 }
 
@@ -279,6 +282,7 @@ pub fn valid_pick(game: GameKind, pick: u8) -> bool {
                 || (120..=122).contains(&pick)
         }
         GameKind::Blackjack => pick == 0,
+        GameKind::Market => false,
     }
 }
 

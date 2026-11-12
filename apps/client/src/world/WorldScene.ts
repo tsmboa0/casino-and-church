@@ -97,6 +97,7 @@ export class WorldScene extends Phaser.Scene {
       if (d.action !== 'none' && this.playing) bus.emit('toast', `${who}: ${d.line.length > 70 ? d.line.slice(0, 68) + '...' : d.line}`);
     });
     this.syncPlots();
+    this.watchBtc();
     bus.on('worldTap', (cx: number, cy: number) => this.onTap(cx, cy));
     this.bubble = new Bubble(this);
     this.hint = new Bubble(this);
@@ -189,6 +190,7 @@ export class WorldScene extends Phaser.Scene {
       if (p.key === 'x/confess') { this.add.image(p.x, p.y, 'confess_tex').setOrigin(0, 1).setDepth(p.y); continue; }
       if (p.key === 'x/craps') { this.add.image(p.x, p.y, 'craps_tex').setOrigin(0, 1).setDepth(p.y); continue; }
       if (p.key === 'x/board') { this.add.image(p.x, p.y, 'board_tex').setOrigin(0, 1).setDepth(p.y); this.addGlow(p.x + 32, p.y - 30, 40, 0xd58cff, 0.18, 0.05); continue; }
+      if (p.key === 'x/exchange') { this.add.image(p.x, p.y, 'exchange_tex').setOrigin(0, 1).setDepth(p.y); this.addGlow(p.x + 32, p.y - 30, 44, 0x3dd6ff, 0.22, 0.06); continue; }
       if (p.key === 'x/fortune' || p.key === 'x/harmony') {
         // a big wheel: static stand + a disc that turns slowly (and a glow behind it)
         const k = p.key === 'x/fortune' ? 'fortune' : 'harmony';
@@ -220,6 +222,31 @@ export class WorldScene extends Phaser.Scene {
       if (s.kind === 'gateC' || s.kind === 'gateH') { el.innerHTML = `<i class="gp t"></i><b class="gb"><span></span></b><i class="gp d"></i>`; (el.querySelector('span') as HTMLElement).textContent = s.text; }
       this.signEls.push({ el, x: s.x, y: s.y, anchor: s.anchor ?? '-50%, 0', kind: s.kind, plot: s.plot });
     }
+  }
+
+  /**
+   * The BTC Exchange's marquee: the live price, green or red against the running round's lock price. Every 4 s while
+   * the player is at the Crossroads (where the kiosk is), every 20 s elsewhere; the server answers from one shared
+   * snapshot, so this costs no chain reads.
+   */
+  private watchBtc() {
+    const sign = this.signEls.find(s => s.kind === 'btc'); if (!sign || !backend.market) return;
+    sign.el.innerHTML = '<small>BTC</small><b>…</b>';
+    const tick = async () => {
+      if (!document.hidden) {
+        try {
+          const m = await backend.market!();
+          const p = m.price ?? m.oraclePrice, lock = m.live?.lockPrice ?? null;
+          const dir = p != null && lock != null ? (p > lock ? 'up' : p < lock ? 'down' : '') : '';
+          sign.el.className = `sign btc ${dir}`;
+          sign.el.innerHTML = p == null ? '<small>BTC</small><b>…</b>'
+            : `<small>BTC</small><b>$${Math.round(p).toLocaleString('en-US')}</b>${dir ? `<i>${dir === 'up' ? '&#9650;' : '&#9660;'}</i>` : ''}`;
+        } catch { /* the kiosk keeps its last price */ }
+      }
+      const near = store.realm === 'plaza' || (this.player && this.player.x > CASINO_WALL_X && this.player.x < CHURCH_WALL_X + GAP);
+      this.time.delayedCall(near ? 4_000 : 20_000, () => void tick());
+    };
+    void tick();
   }
 
   /** owned plots show the player's machine (two slot cabinets in the chosen colour) and the machine's name on the sign */
@@ -280,7 +307,7 @@ export class WorldScene extends Phaser.Scene {
       this.add.rectangle(x, 0, w, WORLD_H, color).setOrigin(0).setDepth(5900).setBlendMode(Phaser.BlendModes.MULTIPLY);
     grade(0, CASINO_WALL_X + GAP, 0xb9a6d8);                                   // casino: dark and cool, so the neon and lamps pop
     grade(CASINO_WALL_X + GAP, CHURCH_WALL_X - CASINO_WALL_X - GAP, 0xd8d2e6);   // crossroads: dusk
-    this.add.rectangle(CASINO_WALL_X + GAP, 12 * 16, CHURCH_WALL_X - CASINO_WALL_X - GAP, WORLD_H - 12 * 16, 0x8a84a0).setOrigin(0).setDepth(5901).setBlendMode(Phaser.BlendModes.MULTIPLY); // the garden behind the barrier recedes
+    this.add.rectangle(CASINO_WALL_X + GAP, 12 * 16, CHURCH_WALL_X - CASINO_WALL_X - GAP, WORLD_H - 12 * 16, 0xa6a0bc).setOrigin(0).setDepth(5901).setBlendMode(Phaser.BlendModes.MULTIPLY); // the garden south of the board: dusk, lit by the exchange
     grade(CHURCH_WALL_X, WORLD_W - CHURCH_WALL_X, 0xeed6b4);                    // church: warm candlelight
     for (const s of this.world.shafts) {
       const b = this.add.image(s.x, s.y, 'beam').setOrigin(0.3, 0).setDepth(6001).setBlendMode(Phaser.BlendModes.ADD).setTint(s.color).setAlpha(s.a);
@@ -439,6 +466,7 @@ export class WorldScene extends Phaser.Scene {
       else if (s.kind === 'zone') s.el.style.fontSize = `${Math.round(overlay.k * 6)}px`;
       else if (s.kind === 'limit') { s.el.style.fontSize = `${(overlay.k * 3.6).toFixed(2)}px`; const t = `<small>MAX BET</small><b>${Math.max(...TABLE.bets)}</b>`; if (s.el.innerHTML !== t) s.el.innerHTML = t; }
       else if (s.kind === 'ticker') { s.el.style.fontSize = `${(overlay.k * 3.2).toFixed(2)}px`; s.el.style.width = `${Math.round(overlay.k * 62)}px`; }
+      else if (s.kind === 'btc') { s.el.style.fontSize = `${(overlay.k * 3.6).toFixed(2)}px`; s.el.style.width = `${Math.round(overlay.k * 48)}px`; }
       if ((s.kind === 'tag' || s.kind === 'sale') && this.player) s.el.classList.toggle('near', Math.hypot(this.player.x - s.x, this.player.y - s.y) < 110);
     }
     this.tagged.forEach(c => c.placeTag());

@@ -12,7 +12,7 @@
  * The v1 -> v2 migration was replayed against a dump of the live state (contracts/realm/src/tests.rs,
  * `live_state_migrates_and_every_record_still_decodes`).
  */
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
 const shared = await import('../packages/shared/src/index.ts');
@@ -21,9 +21,16 @@ const send = process.argv.includes('--send');
 const contract = env.REALM_CONTRACT;
 const priest = env.PRIEST_ACCOUNT || null;
 const rpcUrl = (env.NEAR_RPC_URL || 'https://near-testnet.drpc.org').split(',')[0].trim();
-const wasmPath = new URL('../contracts/realm/target/wasm32-unknown-unknown/release/realm.wasm', import.meta.url);
+// After the cargo build, shrink it with the same wasm features rustc emitted (about 20% smaller, less storage locked):
+//   wasm-opt -Oz --enable-bulk-memory --enable-sign-ext --enable-mutable-globals --enable-nontrapping-float-to-int \
+//     contracts/realm/target/wasm32-unknown-unknown/release/realm.wasm -o contracts/realm/target/realm-opt.wasm
+// The optimized file is used when it is newer than the plain build.
+const plainPath = new URL('../contracts/realm/target/wasm32-unknown-unknown/release/realm.wasm', import.meta.url);
+const optPath = new URL('../contracts/realm/target/realm-opt.wasm', import.meta.url);
 if (!contract || !env.REALM_SECRET) fail('REALM_CONTRACT and REALM_SECRET are required.');
-if (!existsSync(wasmPath)) fail('Build the wasm first.');
+if (!existsSync(plainPath)) fail('Build the wasm first.');
+const wasmPath = existsSync(optPath) && statSync(optPath).mtimeMs >= statSync(plainPath).mtimeMs ? optPath : plainPath;
+console.log(`wasm       ${wasmPath === optPath ? 'optimized (wasm-opt)' : 'plain cargo build'}`);
 const code = readFileSync(wasmPath);
 if (code.length >= 655_360) fail(`wasm is ${code.length} bytes, over the 640 KB budget`);
 

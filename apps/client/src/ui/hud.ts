@@ -92,6 +92,7 @@ const PANEL_COPY: Record<PanelKind, { t: string; body: string; tag: string }> = 
   blackjack: { t: 'Blackjack', tag: 'OUT OF ORDER', body: 'The dealer is on a break. Blackjack opens in a later update.' },
   candles: { t: 'Votive Candles', tag: 'PHASE 3', body: 'Light a candle once a day. Time it right for a deeper FAITH.' },
   confessional: { t: 'Confessional', tag: 'LIVE', body: '' },
+  market: { t: 'BTC Exchange', tag: 'LIVE', body: 'Call BTC up or down for the next minute.' },
 };
 
 export function mountModal(actions: { replay: (r: Realm) => void; reset: () => void }) {

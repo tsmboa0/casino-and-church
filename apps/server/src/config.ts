@@ -44,6 +44,9 @@ export interface Config {
   askPerIpHour: number;
   /** browser RPC calls through /rpc per IP per hour (a whole venue may share one address) */
   rpcPerIpHour: number;
+  /** BTC market keeper: a small full-access account that requests the OutLayer price (it attaches the fee) */
+  marketKeeperAccount: string;
+  marketKeeperKeys: string[];
 }
 
 function list(value: string | undefined): string[] {
@@ -78,6 +81,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     agentKeys: list(env.AGENT_KEYS),
     priestAccount: env.PRIEST_ACCOUNT ?? '',
     priestKeys: list(env.PRIEST_KEYS),
+    marketKeeperAccount: env.MARKET_KEEPER_ACCOUNT ?? '',
+    marketKeeperKeys: list(env.MARKET_KEEPER_SECRET),
     nearaiKey: env.NEARAI_API_KEY ?? '',
     oracleSecret: env.ORACLE_SECRET ?? '',
     nearaiBase: (env.NEARAI_BASE_URL || 'https://cloud-api.near.ai/v1').replace(/\/$/, ''),

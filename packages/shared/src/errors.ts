@@ -14,6 +14,7 @@ export const RELAY_ALLOWLIST = [
   'complete_tour', 'tithe', 'offer_luck', 'light_candle', 'claim_quest', 'create_machine',
   'fund_machine', 'withdraw_machine', 'blackjack_act',
   'create_campaign', 'claim_campaign', 'close_campaign',
+  'market_bet', 'market_settle',
 ] as const;
 
 export const ERROR_TEXT: Record<string, string> = {

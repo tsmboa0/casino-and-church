@@ -453,7 +453,7 @@ impl Realm {
             GameKind::Dice => player.stats.dice = player.stats.dice.saturating_add(1),
             GameKind::Roulette => player.stats.roulette = player.stats.roulette.saturating_add(1),
             GameKind::Blackjack => player.stats.blackjack = player.stats.blackjack.saturating_add(1),
-            GameKind::Wheel | GameKind::Harmony => {}
+            GameKind::Wheel | GameKind::Harmony | GameKind::Market => {}
         }
         player.stats.wagered = player.stats.wagered.saturating_add(bet.wager);
         if via_timeout {

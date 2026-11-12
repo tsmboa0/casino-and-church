@@ -33,6 +33,7 @@ import { Hub } from './indexer/hub.ts';
 import { NearRpc } from './near/rpc.ts';
 import { KeyPool } from './near/pool.ts';
 import { Dealer } from './dealer/dealer.ts';
+import { MarketKeeper } from './market/keeper.ts';
 import { Hosts } from './agent/service.ts';
 import { Activity } from './agent/activity.ts';
 import type { Store } from './db/store.ts';
@@ -68,6 +69,7 @@ const activity = new Activity();
 let agents: Hosts | undefined;
 
 let dealer: Dealer | undefined;
+let market: MarketKeeper | undefined;
 if (dealerPool && config.dealerEncKey && config.contract) {
   const locked = await store.tryDealerLock();
   if (!locked) {
@@ -80,6 +82,13 @@ if (dealerPool && config.dealerEncKey && config.contract) {
     // the hosts run in the process that holds the dealer lock, so two servers never decide twice
     agents = new Hosts(config, rpc, store, hub, activity, { fortuna: agentPool, nakamoto: priestPool });
     agents.start();
+    // the BTC market keeper also runs only here (one process requests prices). Without its keys the market is
+    // still shown (the snapshot), it just cannot be priced from this server.
+    const keeperPool = config.marketKeeperKeys.length && config.marketKeeperAccount
+      ? new KeyPool(rpc, config.marketKeeperAccount, config.contract, config.marketKeeperKeys)
+      : null;
+    market = new MarketKeeper(rpc, keeperPool, store, hub);
+    market.start();
   }
 }
 
@@ -88,6 +97,7 @@ const app = buildApp({
   store,
   hub,
   dealer,
+  market,
   agents,
   activity,
   rpcCall: (method, params) => rpc.call(method, params),

@@ -11,7 +11,7 @@ interface Mark { at: number; account: string; method: string; chips: number }
 const DAY = 86_400_000;
 const ONLINE_MS = 15 * 60_000;
 
-const CASINO_METHODS = new Set(['place_bet', 'blackjack_act', 'claim_timeout']);
+const CASINO_METHODS = new Set(['place_bet', 'blackjack_act', 'claim_timeout', 'market_bet']);
 const CHURCH_METHODS = new Set(['tithe', 'light_candle', 'offer_luck', 'claim_quest']);
 
 export class Activity {
