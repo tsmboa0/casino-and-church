@@ -248,7 +248,7 @@ export class WorldScene extends Phaser.Scene {
       if (!document.hidden) {
         try {
           const m = await backend.market!();
-          const p = m.price ?? m.oraclePrice, lock = m.live?.lockPrice ?? null;
+          const p = m.price ?? m.oraclePrice, lock = m.live && m.live.bets > 0 ? m.live.lockPrice : null;   // only a round with bets in it
           const dir = p != null && lock != null ? (p > lock ? 'up' : p < lock ? 'down' : '') : '';
           sign.el.className = `sign btc ${dir}`;
           sign.el.innerHTML = p == null ? '<small>BTC</small><b>…</b>'

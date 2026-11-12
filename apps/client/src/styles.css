@@ -454,3 +454,23 @@ body:not(.playing) #labels { display: none; }
   box-shadow: 0 0 0 .2em #3dd6ff, 0 0 1.2em rgba(61,214,255,.55), 0 .3em 0 .2em rgba(0,0,0,.35); text-shadow: 0 0 .45em rgba(61,255,160,.9);
   animation: exch-glow 2.4s ease-in-out infinite; }
 @keyframes exch-glow { 50% { box-shadow: 0 0 0 .2em #3dffa0, 0 0 1.6em rgba(61,255,160,.6), 0 .3em 0 .2em rgba(0,0,0,.35); } }
+/* the title: THE CASINO on the left, THE CHURCH on the right (small THE over a big word), the tagline and the buttons
+   in the middle, everything centred on the page */
+.ob.title.split { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; column-gap: clamp(14px, 4vw, 56px);
+  width: min(1180px, calc(100vw - 32px)); height: calc(var(--vvh, 100vh) - 32px); }
+.ob.title.split .wing { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; line-height: 1; font-family: var(--f-cap); font-weight: 700; }
+.ob.title.split .wing .the { font-size: clamp(14px, min(4.6vh, 2.6vw), 28px); letter-spacing: .4em; margin-bottom: .45em; padding-left: .4em; }
+.ob.title.split .wing { min-width: 0; }
+.ob.title.split .wing .big { font-size: clamp(28px, min(12vh, 4.7vw), 84px); letter-spacing: .02em; }
+.ob.title.split .wing.casino { color: #ff9ac6; } .ob.title.split .wing.church { color: var(--gold2); }
+.ob.title.split .wing.casino .big { text-shadow: 0 3px 0 #b3195f, 0 6px 0 #5b0c32, 0 9px 0 var(--ink), 0 0 36px rgba(255,46,136,.8); animation: neon 3.4s steps(1) infinite; }
+.ob.title.split .wing.church .big { text-shadow: 0 3px 0 #b27a18, 0 6px 0 #5b3a0a, 0 9px 0 var(--ink), 0 0 36px rgba(255,190,90,.7); }
+.ob.title.split .wing.casino .the { text-shadow: 0 2px 0 #5b0c32, 0 0 14px rgba(255,46,136,.6); } .ob.title.split .wing.church .the { text-shadow: 0 2px 0 #5b3a0a, 0 0 14px rgba(255,190,90,.5); }
+.ob.title.split .mid { display: flex; flex-direction: column; align-items: center; gap: clamp(8px, 2.4vh, 16px); max-width: 300px; }
+.ob.title.split .tagline { font-size: clamp(8px, 2.2vh, 11px); white-space: nowrap; }
+.ob.title.split .cta { flex-direction: column; margin-top: 0; gap: 10px; }
+.ob.title.split .cta .btn { min-width: 200px; }
+.ob.title.split .fine { text-align: center; }
+.ob.title.split.splash .tap { margin-top: 0; }
+/* a narrow screen (portrait): stack them */
+@media (max-aspect-ratio: 1/1) { .ob.title.split { grid-template-columns: 1fr; row-gap: 18px; height: auto; } }

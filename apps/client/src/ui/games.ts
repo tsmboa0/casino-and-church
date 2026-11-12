@@ -1068,6 +1068,26 @@ bus.on('marketSettled', (r: MarketResult) => {
   bus.emit('toast', head);
 });
 
+/** TradingView's Advanced Chart widget: BTC/USDT, 1-minute candles, dark, no toolbars (the panel is small) */
+function mountTradingView(host: HTMLElement) {
+  host.innerHTML = '<span class="mk-note">loading the TradingView chart…</span>';
+  const wrap = document.createElement('div');
+  wrap.className = 'tradingview-widget-container mk-tv';
+  const inner = document.createElement('div');
+  inner.className = 'tradingview-widget-container__widget';
+  const s = document.createElement('script');
+  s.type = 'text/javascript'; s.async = true;
+  s.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+  s.textContent = JSON.stringify({
+    autosize: true, symbol: 'BINANCE:BTCUSDT', interval: '1', timezone: 'Etc/UTC', theme: 'dark', style: '1', locale: 'en',
+    hide_top_toolbar: true, hide_side_toolbar: true, hide_legend: false, hide_volume: true, allow_symbol_change: false,
+    save_image: false, calendar: false, withdateranges: false, details: false, hotlist: false,
+    backgroundColor: '#02060a', gridColor: 'rgba(61, 214, 255, 0.06)', support_host: 'https://www.tradingview.com',
+  });
+  wrap.append(inner, s);
+  host.append(wrap);
+}
+
 function market(root: Root, close: () => void) {
   if (!backend.market) { shell(root, close, 'casino', 'BTC EXCHANGE', '<p class="mk-off">The exchange is closed in this mode.</p>'); return; }
   let st: MarketState | null = null, side: MarketSide = 'up', bet = 1, busy = false, alive = true, timer = 0, frame = 0;
@@ -1075,14 +1095,18 @@ function market(root: Root, close: () => void) {
   shell(root, close, 'market' as any, 'BTC EXCHANGE', `
   <div class="mk">
     <div class="mk-l">
-      <div class="mk-quote"><div><small>BTC / USD</small><b id="px">—</b></div><div class="mk-chg" id="chg"></div></div>
-      <div class="mk-chart"><canvas id="cv"></canvas><span class="mk-note" id="cvn">connecting to the price feed…</span></div>
+      <div class="mk-quote"><div><small>BTC / USDT &middot; BINANCE</small><b id="px">—</b></div><div class="mk-chg" id="chg"></div></div>
+      <div class="mk-chart" id="chart"><canvas id="cv"></canvas><span class="mk-note" id="cvn">connecting to the price feed…</span></div>
+      <div class="mk-tl" id="tl"><div class="seg bet"><span>BETTING</span></div><div class="seg min"><span>YOUR MINUTE</span></div><i class="now" id="tlnow"></i></div>
+      <div class="mk-tlx"><span id="tla"></span><span id="tlb"></span></div>
       <div class="mk-recent" id="recent"></div>
     </div>
     <div class="mk-r">
       <div class="mk-box live" id="live"></div>
       <div class="mk-box open" id="open">
         <div class="mk-h"><span id="oh">NEXT ROUND</span><b id="ot"></b></div>
+        <div class="mk-row ref"><span>STARTS AT</span><b id="oref">—</b></div>
+        <p class="mk-hint">Your round starts at the BTC price when betting closes and ends one minute later. Call where it goes.</p>
         <div class="mk-sides">
           <button class="mk-side up sel" data-s="up"><b>${ARROW.up} UP</b><small id="pu"></small></button>
           <button class="mk-side down" data-s="down"><b>${ARROW.down} DOWN</b><small id="pd"></small></button>
@@ -1096,6 +1120,9 @@ function market(root: Root, close: () => void) {
     <div class="mk-foot" id="foot">One-minute rounds. Call where BTC goes from the lock price to the close price. A tie returns your bet.</div>
   </div>`);
   const $px = $(root, '#px'), $chg = $(root, '#chg'), cv = $<HTMLCanvasElement>(root, '#cv'), go = $<HTMLButtonElement>(root, '#go');
+  // the live game shows TradingView's real BTC chart (1-minute candles); the offline demo draws its simulated prices
+  const tv = backend.mode === 'chain';
+  if (tv) mountTradingView($(root, '#chart'));
   const shutdown = () => { alive = false; window.clearTimeout(timer); cancelAnimationFrame(frame); bus.off('marketSettled', onSettled); };
   $(root, '[data-close]').addEventListener('click', shutdown);
   root.closest('#modal')?.addEventListener('pointerdown', (e) => { if (e.target === e.currentTarget) shutdown(); }, { once: true });
@@ -1118,20 +1145,23 @@ function market(root: Root, close: () => void) {
     // ---- price + change against the live round's lock price
     const p = s.price ?? s.oraclePrice;
     $px.textContent = usd(p);
-    const ref = s.live?.lockPrice ?? null;
+    // an empty round left "live" by an idle market is not running: nobody is in it and no price will close it
+    const L = s.live && (s.live.bets > 0 || !idle(s)) ? s.live : null;
+    const ref = L?.lockPrice ?? null;
     if (p != null && ref != null) {
       const d = p - ref, cls = d > 0 ? 'up' : d < 0 ? 'down' : '';
       $chg.className = `mk-chg ${cls}`;
       $chg.innerHTML = `<small>VS LOCK ${usd(ref)}</small><b>${d > 0 ? ARROW.up : d < 0 ? ARROW.down : '='} ${usd(Math.abs(d))}</b>`;
     } else { $chg.className = 'mk-chg'; $chg.innerHTML = '<small>NO ROUND RUNNING</small><b>&nbsp;</b>'; }
     // ---- the live round
-    const L = s.live, lv = $(root, '#live');
+    const lv = $(root, '#live');
     if (!L) lv.innerHTML = `<div class="mk-h"><span>LIVE ROUND</span><b></b></div><p class="mk-dim">No round is running. Bet on the next one below.</p>`;
     else {
       const left = (s.open?.lockAt ?? 0) - now(), my = mineIn(s, L.epoch);
       const winning = my && p != null && L.lockPrice != null ? (p === L.lockPrice ? 'even' : (p > L.lockPrice) === (my.side === 'up') ? 'ahead' : 'behind') : '';
       lv.innerHTML = `<div class="mk-h"><span>LIVE #${L.epoch}</span><b>${s.pending || left <= 0 ? '<i class="mk-spin"></i> PRICING' : `ENDS ${clock(left)}`}</b></div>
         <div class="mk-row"><span>LOCKED AT</span><b>${usd(L.lockPrice)}</b></div>
+        ${p != null && L.lockPrice != null ? `<div class="mk-row"><span>NOW</span><b class="${p > L.lockPrice ? 'up' : p < L.lockPrice ? 'down' : ''}">${usd(p)} ${p > L.lockPrice ? ARROW.up : p < L.lockPrice ? ARROW.down : '='}</b></div>` : ''}
         <div class="mk-row"><span>${ARROW.up} ${fmt(L.up)} &middot; ${ARROW.down} ${fmt(L.down)}</span><b>${L.bets} BET${L.bets === 1 ? '' : 'S'}</b></div>
         ${my ? `<div class="mk-you ${winning}">YOU: ${ARROW[my.side]} ${my.side.toUpperCase()} ${my.chips} &middot; ${winning === 'ahead' ? 'WINNING' : winning === 'behind' ? 'LOSING' : 'EVEN'}</div>` : ''}`;
     }
@@ -1140,6 +1170,14 @@ function market(root: Root, close: () => void) {
     const isIdle = idle(s), lockLeft = (O?.lockAt ?? 0) - now();
     $(root, '#oh').textContent = O ? `NEXT ROUND #${O.epoch}` : 'NEXT ROUND';
     $(root, '#ot').innerHTML = !s.enabled ? 'CLOSED' : !O || isIdle ? 'STARTS ON THE FIRST BET' : lockLeft > 0 ? `BETS CLOSE ${clock(lockLeft)}` : '<i class="mk-spin"></i> LOCKING';
+    // what the bet is measured from: the live price now (an estimate) until the oracle takes the exact one at the close
+    $(root, '#oref').innerHTML = !O || isIdle || lockLeft > 0 ? `≈ ${usd(p)} <small>LIVE</small>` : '<i class="mk-spin"></i> TAKING THE PRICE';
+    // the timeline: the betting window, then "your minute"; the marker is now
+    const tlStart = O && !isIdle ? O.openAt : now(), tlLock = O && !isIdle ? O.lockAt : now() + s.roundS * 1000, tlEnd = tlLock + s.roundS * 1000;
+    const pct = Math.max(0, Math.min(100, ((now() - tlStart) / (tlEnd - tlStart)) * 100));
+    $(root, '#tlnow').style.left = `${pct.toFixed(2)}%`;
+    $(root, '#tla').textContent = isIdle ? 'the first bet starts a 60 s window' : lockLeft > 0 ? `bets close in ${clock(lockLeft)}` : 'betting closed';
+    $(root, '#tlb').textContent = isIdle ? 'result one minute after it closes' : `result in ${clock(tlEnd - now())}`;
     $(root, '#pu').textContent = `pays ${s.payout}× · pool ${fmt(O?.up ?? 0)}`;
     $(root, '#pd').textContent = `pays ${s.payout}× · pool ${fmt(O?.down ?? 0)}`;
     const key = s.wagers.join(',');
@@ -1154,7 +1192,7 @@ function market(root: Root, close: () => void) {
     $$(root, '.mk-side').forEach(b => ((b as HTMLButtonElement).disabled = busy || !open));
     const mine = $(root, '#mine');
     mine.hidden = !my;
-    if (my) mine.innerHTML = `YOUR BET: <b>${ARROW[my.side]} ${my.side.toUpperCase()} ${my.chips}</b> &middot; ${lockLeft > 0 ? `locks in ${clock(lockLeft)}` : 'locking now'}`;
+    if (my) mine.innerHTML = `YOUR BET: <b>${ARROW[my.side]} ${my.side.toUpperCase()} ${my.chips}</b> &middot; ${lockLeft > 0 ? `starts at the price in ${clock(lockLeft)}` : 'taking the start price now'}`;
     go.hidden = !!my;
     // ---- the crowd: everybody's calls in the open and live rounds
     const crowd = [...(O ? (s.crowd[O.epoch] ?? []).map(b => ({ ...b, r: 'NEXT' })) : []), ...(L ? (s.crowd[L.epoch] ?? []).map(b => ({ ...b, r: 'LIVE' })) : [])];
@@ -1164,13 +1202,13 @@ function market(root: Root, close: () => void) {
     // ---- recent outcomes
     $(root, '#recent').innerHTML = s.recent.slice(0, 10).map(r => `<i class="mk-pill ${r.outcome || 'none'}" title="#${r.epoch}">${r.outcome === 'up' ? ARROW.up : r.outcome === 'down' ? ARROW.down : r.outcome === 'tie' ? '=' : '&times;'}</i>`).join('') || '<span class="mk-dim">No rounds yet</span>';
     $(root, '#foot').innerHTML = backend.mode === 'chain'
-      ? `${s.roundS}-second rounds &middot; each lock and close price comes from the <b>${s.oracle}</b> (a median of several exchanges) &middot; settled on NEAR &middot; a tie returns your bet`
+      ? `Chart: Binance BTC/USDT by <a href="https://www.tradingview.com/" target="_blank" rel="noopener nofollow">TradingView</a> &middot; every start and end price comes from the <b>${s.oracle}</b> (a median of several exchanges) and is settled on NEAR &middot; a tie returns your bet`
       : `${s.roundS}-second rounds &middot; <b>demo prices</b> (offline) &middot; on the live game the OutLayer TEE oracle prices every round on NEAR`;
   };
 
   // ---- the chart: the last five minutes of BTC, the live round's lock price as a dashed line
   const draw = () => {
-    if (!alive) return;
+    if (!alive || tv) return;
     frame = requestAnimationFrame(draw);
     const s = st; if (!s) return;
     const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;

@@ -258,12 +258,16 @@ export class MarketKeeper {
   }
 }
 
-/** BTC/USD spot for the chart: Coinbase, then Kraken, then Bitstamp */
+/**
+ * BTC spot for the panel's price box: Binance BTC/USDT first, the same market as the TradingView chart. The oracle's
+ * median comes mostly from USDT markets (Binance, KuCoin, Gate, HTX, Crypto.com), so this tracks the lock price far
+ * better than a USD market (USDT trades ~0.1% over the dollar). KuCoin, then Coinbase, if Binance does not answer.
+ */
 export async function spotBtc(): Promise<number> {
   const sources: [string, (j: any) => number][] = [
+    ['https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT', (j) => Number(j?.price)],
+    ['https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=BTC-USDT', (j) => Number(j?.data?.price)],
     ['https://api.coinbase.com/v2/prices/BTC-USD/spot', (j) => Number(j?.data?.amount)],
-    ['https://api.kraken.com/0/public/Ticker?pair=XBTUSD', (j) => Number(Object.values<any>(j?.result ?? {})[0]?.c?.[0])],
-    ['https://www.bitstamp.net/api/v2/ticker/btcusd/', (j) => Number(j?.last)],
   ];
   for (const [url, read] of sources) {
     try {

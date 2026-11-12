@@ -22,7 +22,11 @@ export function faceCss(id: string): string {
   return `background-image:url(${ATLAS_BASE}chars/${id}.png);background-size:${c.cols * 16 * k}px ${Object.keys(c.rows).length * 32 * k}px;background-position:0 -14px`;
 }
 
-const NAMES_A = ['Lucky', 'Gilded', 'Humble', 'Silver', 'Wandering', 'Velvet', 'Midnight', 'Neon', 'Sacred', 'Crimson'];
+/** the title's two wings: a small THE over a big CASINO (left) and CHURCH (right); the middle carries the buttons */
+const WING_CASINO = '<div class="wing casino"><span class="the">THE</span><span class="big">CASINO</span></div>';
+const WING_CHURCH = '<div class="wing church"><span class="the">THE</span><span class="big">CHURCH</span></div>';
+
+const NAMES_A =['Lucky', 'Gilded', 'Humble', 'Silver', 'Wandering', 'Velvet', 'Midnight', 'Neon', 'Sacred', 'Crimson'];
 const NAMES_B = ['Fox', 'Saint', 'Dealer', 'Pilgrim', 'Magpie', 'Gambler', 'Cardinal', 'Raven', 'Pioneer', 'Sparrow'];
 const rnd = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
 const randomName = () => `${rnd(NAMES_A)}${rnd(NAMES_B)}${Math.floor(Math.random() * 90 + 10)}`.slice(0, NAME_MAX);
@@ -57,15 +61,14 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
   const title = () => {
     const p = store.profile;
     root.innerHTML = `
-    <div class="ob title">
-      <div class="logo">
-        <div class="l1">THE CASINO</div>
-        <div class="amp"><i></i><span>&amp;</span><i></i></div>
-        <div class="l2">THE CHURCH</div>
+    <div class="ob title split">
+      ${WING_CASINO}
+      <div class="mid">
+        <p class="tagline">Balance is survival.</p>
+        <div class="cta">${ctaHtml(p)}</div>
+        <small class="fine">Testnet &middot; play money &middot; NEAR HACKATHON 2026</small>
       </div>
-      <p class="tagline">Balance is survival.</p>
-      <div class="cta">${ctaHtml(p)}</div>
-      <small class="fine">Testnet &middot; play money &middot; NEAR HACKATHON 2026</small>
+      ${WING_CHURCH}
     </div>`;
     root.querySelector('#play')?.addEventListener('click', nameStep);
     root.querySelector('#new')?.addEventListener('click', () => { clearProfile(); store.profile = null; nameStep(); });
@@ -253,11 +256,14 @@ export function showSplash(onTap: () => void): Promise<void> {
     const root = document.getElementById('onboarding')!;
     root.className = 'show';
     root.innerHTML = `
-    <div class="ob title splash">
-      <div class="logo"><div class="l1">THE CASINO</div><div class="amp"><i></i><span>&amp;</span><i></i></div><div class="l2">THE CHURCH</div></div>
-      <p class="tagline">Balance is survival.</p>
-      <div class="tap">TAP TO START</div>
-      <small class="fine">Best played in landscape with sound on${(/iPhone|iPad/.test(navigator.userAgent) && !(navigator as any).standalone) ? '<br>For full screen: Share \u2192 Add to Home Screen' : ''}</small>
+    <div class="ob title split splash">
+      ${WING_CASINO}
+      <div class="mid">
+        <p class="tagline">Balance is survival.</p>
+        <div class="tap">TAP TO START</div>
+        <small class="fine">Best played in landscape with sound on${(/iPhone|iPad/.test(navigator.userAgent) && !(navigator as any).standalone) ? '<br>For full screen: Share \u2192 Add to Home Screen' : ''}</small>
+      </div>
+      ${WING_CHURCH}
     </div>`;
     const go = () => { window.removeEventListener('keydown', go); root.removeEventListener('pointerdown', go); onTap(); res(); };
     root.addEventListener('pointerdown', go); window.addEventListener('keydown', go);
