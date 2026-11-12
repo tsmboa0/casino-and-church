@@ -63,12 +63,13 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
     root.innerHTML = `
     <div class="ob title split">
       ${WING_CASINO}
-      <div class="mid">
-        <p class="tagline">Balance is survival.</p>
-        <div class="cta">${ctaHtml(p)}</div>
+      <div class="mid spacer"><span class="and">&amp;</span></div>
+      ${WING_CHURCH}
+      <p class="tagline wide">Balance is survival.</p>
+      <div class="under">
+        <div class="cta row">${ctaHtml(p)}</div>
         <small class="fine">Testnet &middot; play money &middot; NEAR HACKATHON 2026</small>
       </div>
-      ${WING_CHURCH}
     </div>`;
     root.querySelector('#play')?.addEventListener('click', nameStep);
     root.querySelector('#new')?.addEventListener('click', () => { clearProfile(); store.profile = null; nameStep(); });
@@ -258,12 +259,13 @@ export function showSplash(onTap: () => void): Promise<void> {
     root.innerHTML = `
     <div class="ob title split splash">
       ${WING_CASINO}
-      <div class="mid">
-        <p class="tagline">Balance is survival.</p>
+      <div class="mid spacer"><span class="and">&amp;</span></div>
+      ${WING_CHURCH}
+      <p class="tagline wide">Balance is survival.</p>
+      <div class="under">
         <div class="tap">TAP TO START</div>
         <small class="fine">Best played in landscape with sound on${(/iPhone|iPad/.test(navigator.userAgent) && !(navigator as any).standalone) ? '<br>For full screen: Share \u2192 Add to Home Screen' : ''}</small>
       </div>
-      ${WING_CHURCH}
     </div>`;
     const go = () => { window.removeEventListener('keydown', go); root.removeEventListener('pointerdown', go); onTap(); res(); };
     root.addEventListener('pointerdown', go); window.addEventListener('keydown', go);
