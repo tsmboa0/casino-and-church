@@ -7,3 +7,4 @@ export const CHIP_YOCTO = 10n ** 22n;
 export const CHIPS_PER_NEAR = 100n;
 export * from './names.ts';
 export * from './campaigns.ts';
+export * from './auth.ts';

@@ -88,6 +88,14 @@ export interface Backend {
   claimCampaign?(id: number): Promise<{ chips: number; faith: number }>;
   createCampaign?(c: NewCampaign): Promise<number>;
   closeCampaign?(id: number): Promise<void>;
+  /** OPTIONAL (chain mode): username + password accounts. The password never leaves the device. */
+  signUp?(username: string, password: string): Promise<void>;
+  signIn?(username: string, password: string): Promise<{ username: string; avatar: string; toursDone: { casino: boolean; church: boolean } }>;
+  signOut?(): void;
+  /** the username signed in on this device, if any */
+  linkedAccount?(): string | null;
+  /** a wallet already lives on this device (e.g. a guest from before accounts existed) */
+  hasDeviceWallet?(): boolean;
   /** OPTIONAL: re-read balances from the chain before acting on them */
   sync?(): Promise<void>;
   /** OPTIONAL: this device's guest wallet (chain mode) */

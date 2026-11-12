@@ -116,3 +116,5 @@ async function open(api: string): Promise<Session> {
 }
 
 export function resetNonce() { nonce = 0n; pending = null; }
+/** after sign-in / sign-out the device's wallet changed: the next action opens a fresh session with it */
+export function resetSession() { nonce = 0n; nonceKnown = false; pending = null; current = null; reread = null; wallet.accountId = ''; wallet.encrypted = false; }

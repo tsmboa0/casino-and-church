@@ -439,3 +439,8 @@ body:not(.playing) #labels { display: none; }
 .wallet-note[hidden] { display: none; }
 .wallet-note svg { flex: none; width: 12px; height: 12px; margin-top: 2px; }
 .wallet-note b { font-family: "Num", var(--f-cap); font-weight: 400; color: #7dffb0; }
+/* username + password screens: stacked inputs */
+.field.col { flex-direction: column; gap: 10px; }
+.field.col input { width: 286px; }  /* the name input + dice button */
+.field input[type=password] { letter-spacing: 2px; }
+.field input::placeholder { letter-spacing: 0; color: rgba(255,240,210,.35); }

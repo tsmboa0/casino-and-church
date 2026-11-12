@@ -4,7 +4,7 @@ import { store, clearProfile, type Profile } from '../core/state';
 import { atlasDom } from '../core/atlasDom';
 import { icon } from './icons';
 import { backend } from '../core/backend';
-import { NAME_MAX, cleanName, nameProblem } from '@cnc/shared';
+import { NAME_MAX, PASSWORD_MIN, cleanName, nameProblem, passwordProblem } from '@cnc/shared';
 
 let MANIFEST: any = null;
 export const setManifest = (m: any) => { MANIFEST = m; };
@@ -31,7 +31,14 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
   MANIFEST = manifest;
   const root = document.getElementById('onboarding')!;
   root.className = 'show';
-  const draft = { name: '', avatar: AVATARS[0].id };
+  /** live game (a chain backend) = real accounts; the offline demo has none */
+  const accounts = !!backend.signIn;
+  const draft: {
+    name: string; avatar: string;
+    securing?: boolean;                 // an existing guest is setting a password (keeps the wallet and chips)
+    created?: boolean;                  // the account exists now: BACK must not sign up twice
+    signedIn?: { username: string; avatar: string; toursDone: { casino: boolean; church: boolean } };
+  } = { name: '', avatar: AVATARS[0].id };
   const k = window.innerHeight >= 520 ? 3 : 2;
   // never scroll, never clip: scale the current screen to fit whatever the window is
   const fit = () => {
@@ -57,23 +64,66 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
         <div class="l2">THE CHURCH</div>
       </div>
       <p class="tagline">Balance is survival.</p>
-      <div class="cta">
-        ${p ? `<button class="btn big pulse" id="cont"><span>CONTINUE</span><small>${p.username}</small></button><button class="btn ghost" id="new">NEW GAME</button>` : `<button class="btn big pulse" id="play">PLAY AS GUEST</button>`}
-        <i class="cta-br"></i>
-        <button class="btn social" id="social">${icon('wallet', 16)}<span>SIGN IN WITH SOCIALS</span></button>
-        <i class="cta-br"></i>
-        <div class="soon" id="soon" hidden><b>NEAR AUTH &middot; COMING SOON</b><span>Sign in with Google, Apple or email and keep your account on every device.</span></div>
-      </div>
+      <div class="cta">${ctaHtml(p)}</div>
       <small class="fine">Testnet &middot; play money &middot; NEAR HACKATHON 2026</small>
     </div>`;
     root.querySelector('#play')?.addEventListener('click', nameStep);
     root.querySelector('#new')?.addEventListener('click', () => { clearProfile(); store.profile = null; nameStep(); });
     root.querySelector('#cont')?.addEventListener('click', () => finish(p!));
-    let soonTimer = 0;
-    root.querySelector('#social')!.addEventListener('click', () => {
-      const s = root.querySelector('#soon') as HTMLElement; s.hidden = false; s.classList.remove('pop'); void s.offsetWidth; s.classList.add('pop');
-      window.clearTimeout(soonTimer); soonTimer = window.setTimeout(() => { if (s.isConnected) s.hidden = true; }, 2500);
+    root.querySelector('#signin')?.addEventListener('click', signInStep);
+    root.querySelector('#create')?.addEventListener('click', () => { draft.securing = false; nameStep(); });
+    root.querySelector('#secure')?.addEventListener('click', () => { draft.securing = true; draft.name = p?.username ?? ''; nameStep(); });
+    root.querySelector('#switch')?.addEventListener('click', () => {
+      if (!confirm('Sign out on this device? You can sign back in any time with your username and password.')) return;
+      backend.signOut?.(); clearProfile(); store.profile = null; title();
     });
+  };
+  /** the title's buttons. Live game: real accounts (username + password). Offline demo: no accounts. */
+  const ctaHtml = (p: Profile | null) => {
+    if (!accounts) {
+      return p ? `<button class="btn big pulse" id="cont"><span>CONTINUE</span><small>${p.username}</small></button><button class="btn ghost" id="new">NEW GAME</button>`
+        : `<button class="btn big pulse" id="play">PLAY THE DEMO</button>`;
+    }
+    const linked = backend.linkedAccount?.();
+    if (linked && p) return `<button class="btn big pulse" id="cont"><span>CONTINUE</span><small>${p.username}</small></button><button class="btn ghost" id="switch">SWITCH ACCOUNT</button>`;
+    // a guest wallet from before accounts existed: let its owner keep the chips by setting a password
+    if (!linked && backend.hasDeviceWallet?.()) return `<button class="btn big pulse" id="secure"><span>SECURE MY ACCOUNT</span><small>${p ? p.username : 'keep your chips'}</small></button><button class="btn ghost" id="signin">SIGN IN</button>`;
+    return `<button class="btn big pulse" id="signin">SIGN IN</button><button class="btn ghost" id="create">CREATE ACCOUNT</button>`;
+  };
+
+  // ---------------------------------------------------------------- sign in (any device)
+  const signInStep = () => {
+    root.innerHTML = `
+    <div class="ob card px">
+      <h2>Welcome back</h2>
+      <p class="sub">Sign in to continue with your chips, LUCK and FAITH.</p>
+      <div class="field col"><input id="su" maxlength="${NAME_MAX}" spellcheck="false" autocomplete="username" autocapitalize="off" placeholder="Username" value="${draft.name}" />
+        <input id="sp" type="password" autocomplete="current-password" placeholder="Password" /></div>
+      <small class="hint" id="s-hint">Your password never leaves this device.</small>
+      <div class="row"><button class="btn ghost" id="back">BACK</button><button class="btn" id="go">SIGN IN</button></div>
+    </div>`;
+    const u = root.querySelector('#su') as HTMLInputElement, pw = root.querySelector('#sp') as HTMLInputElement;
+    const go = root.querySelector('#go') as HTMLButtonElement, hint = root.querySelector('#s-hint') as HTMLElement;
+    const submit = async () => {
+      if (go.disabled) return;
+      if (!u.value.trim() || !pw.value) { hint.textContent = 'Enter your username and password.'; hint.className = 'hint bad'; return; }
+      if (!backend.linkedAccount?.() && backend.hasDeviceWallet?.()
+        && !confirm('This device has a guest wallet with no password. Signing in replaces it, and its chips are lost unless you secure it first. Sign in anyway?')) return;
+      go.disabled = true; go.textContent = 'UNLOCKING...'; hint.textContent = 'Unlocking your wallet on this device...'; hint.className = 'hint wait';
+      try {
+        const r = await backend.signIn!(u.value, pw.value);
+        draft.name = r.username;
+        if (r.avatar) finish({ username: r.username, avatar: r.avatar, startRealm: 'plaza' as any, toursDone: r.toursDone });
+        else { draft.signedIn = r; avatarStep(); }
+      } catch (e) {
+        hint.textContent = e instanceof Error ? e.message : 'Could not sign in.'; hint.className = 'hint bad';
+        go.disabled = false; go.textContent = 'SIGN IN';
+      }
+    };
+    go.addEventListener('click', submit);
+    [u, pw].forEach(i => i.addEventListener('keydown', (e) => { if (e.key === 'Enter') void submit(); }));
+    root.querySelector('#back')!.addEventListener('click', title);
+    (draft.name ? pw : u).focus();
   };
 
   // ---------------------------------------------------------------- 1. name
@@ -81,13 +131,16 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
     root.innerHTML = `
     <div class="ob card px">
       ${dots(1)}
-      <h2>What shall we call you, wanderer?</h2>
-      <p class="sub">Your name travels between both worlds.</p>
+      <h2>${!accounts ? 'What shall we call you, wanderer?' : draft.securing ? 'Secure your account' : 'Create your account'}</h2>
+      <p class="sub">${accounts ? 'Your username is how you sign in, on any device.' : 'Your name travels between both worlds.'}</p>
       <div class="field">
-        <input id="nm" maxlength="${NAME_MAX}" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="Your name" value="${draft.name}" />
+        <input id="nm" maxlength="${NAME_MAX}" spellcheck="false" autocomplete="${accounts ? 'username' : 'off'}" autocapitalize="off" placeholder="${accounts ? 'Username' : 'Your name'}" value="${draft.name}" />
         <button class="btn ghost sq" id="dice" title="Random name">${icon('dice', 20)}</button>
       </div>
       <small class="hint" id="nm-hint">3 to ${NAME_MAX} letters or numbers. Names are unique.</small>
+      ${accounts ? `<div class="field col"><input id="pw1" type="password" autocomplete="new-password" placeholder="Password" />
+        <input id="pw2" type="password" autocomplete="new-password" placeholder="Type it again" /></div>
+      <small class="hint" id="pw-hint">At least ${PASSWORD_MIN} characters. We never see it: forget it and the account cannot be recovered.</small>` : ''}
       <div class="wallet-note" id="wnote" hidden></div>
       <div class="row"><button class="btn ghost" id="back">BACK</button><button class="btn" id="next" disabled>NEXT</button></div>
     </div>`;
@@ -114,23 +167,38 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
       }, 350);
     };
     inp.addEventListener('input', check); check();
-    // the guest wallet already exists (it is opened at boot): say so, briefly and truthfully
+    // say what happens to the wallet, briefly and truthfully
     const note = root.querySelector('#wnote') as HTMLElement;
-    if (backend.wallet) {
-      void backend.wallet().then((w) => {
-        if (!note.isConnected) return;
-        const id = `${w.accountId.slice(0, 6)}&hellip;${w.accountId.slice(-4)}`;
-        note.innerHTML = `${icon('wallet', 12)}<span>A NEAR wallet <b>${id}</b> was created for you${w.encrypted ? ', encrypted and saved on this device' : ' and saved on this device'}. Back it up any time from Settings.</span>`;
-        note.hidden = false;
-      }).catch(() => { /* no wallet yet: say nothing */ });
-    } else {
-      note.innerHTML = `${icon('wallet', 12)}<span>Demo mode: chips are pretend and nothing is saved on chain.</span>`;
-      note.hidden = false;
-    }
-    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !next.disabled) avatarStep(); });
+    note.innerHTML = accounts
+      ? `${icon('wallet', 12)}<span>${draft.securing ? 'Your NEAR wallet on this device' : 'A NEAR wallet is created for you. It'} is encrypted with your password on this device; our server only ever stores that locked copy.</span>`
+      : `${icon('wallet', 12)}<span>Demo mode: chips are pretend and nothing is saved on chain.</span>`;
+    note.hidden = false;
+    // live game: the password creates (or secures) the account before the avatar step
+    const pw1 = root.querySelector('#pw1') as HTMLInputElement | null, pw2 = root.querySelector('#pw2') as HTMLInputElement | null;
+    const pwHint = root.querySelector('#pw-hint') as HTMLElement | null;
+    const proceed = async () => {
+      if (next.disabled) return;
+      if (!accounts) return avatarStep();
+      const bad = passwordProblem(pw1!.value) ?? (pw1!.value !== pw2!.value ? 'The two passwords do not match' : null);
+      if (bad) { pwHint!.textContent = bad; pwHint!.className = 'hint bad'; return; }
+      next.disabled = true; next.textContent = 'CREATING...';
+      pwHint!.textContent = draft.securing ? 'Locking your wallet with your password...' : 'Creating your wallet and locking it with your password...'; pwHint!.className = 'hint wait';
+      try {
+        await backend.signUp!(draft.name, pw1!.value);
+        draft.created = true;
+        // a guest who already has a character goes straight back in
+        const p = store.profile;
+        if (draft.securing && p) return finish({ ...p, username: draft.name });
+        avatarStep();
+      } catch (e) {
+        pwHint!.textContent = e instanceof Error ? e.message : 'Could not create the account.'; pwHint!.className = 'hint bad';
+        next.disabled = false; next.textContent = 'NEXT';
+      }
+    };
+    [inp, pw1, pw2].forEach(i => i?.addEventListener('keydown', (e) => { if (e.key === 'Enter') void proceed(); }));
     root.querySelector('#dice')!.addEventListener('click', () => { inp.value = randomName(); check(); });
     root.querySelector('#back')!.addEventListener('click', title);
-    next.addEventListener('click', avatarStep);
+    next.addEventListener('click', () => void proceed());
   };
 
   // ---------------------------------------------------------------- 2. avatar
@@ -148,7 +216,7 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
           <b id="av-name"></b><small id="av-blurb"></small>
         </div>
       </div>
-      <div class="row"><button class="btn ghost" id="back">BACK</button><button class="btn big" id="next">NEXT</button></div>
+      <div class="row">${draft.created || draft.signedIn ? '' : '<button class="btn ghost" id="back">BACK</button>'}<button class="btn big" id="next">NEXT</button></div>
     </div>`;
     const upd = () => {
       const a = AVATARS.find(x => x.id === draft.avatar)!;
@@ -158,7 +226,7 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
     };
     root.querySelectorAll<HTMLElement>('.av').forEach(b => b.addEventListener('click', () => { draft.avatar = b.dataset.id!; upd(); }));
     upd();
-    root.querySelector('#back')!.addEventListener('click', nameStep);
+    root.querySelector('#back')?.addEventListener('click', nameStep);
     root.querySelector('#next')!.addEventListener('click', howStep);
   };
 
@@ -173,7 +241,7 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
     </div>`;
     playHowTo(root);
     root.querySelector('#back')!.addEventListener('click', avatarStep);
-    root.querySelector('#go')!.addEventListener('click', () => finish({ username: draft.name, avatar: draft.avatar, startRealm: 'plaza' as any, toursDone: { casino: false, church: false } }));
+    root.querySelector('#go')!.addEventListener('click', () => finish({ username: draft.name, avatar: draft.avatar, startRealm: 'plaza' as any, toursDone: draft.signedIn?.toursDone ?? { casino: false, church: false } }));
   };
 
   title();

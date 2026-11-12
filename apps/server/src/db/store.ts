@@ -32,6 +32,17 @@ export interface BetRow {
   blessing?: string | null;
 }
 
+export interface AuthRow {
+  nameKey: string;
+  username: string;
+  accountId: string;
+  salt: string;
+  iterations: number;
+  authHash: string;
+  walletIv: string;
+  walletCt: string;
+}
+
 export interface PlayerRow {
   accountId: string;
   wagered: string;
@@ -79,6 +90,11 @@ export interface AttestationRow {
 
 export interface Store {
   account(id: string): Promise<AccountRow | null>;
+  /** secured accounts (username + password) */
+  authByName(nameKey: string): Promise<AuthRow | null>;
+  authByAccount(accountId: string): Promise<AuthRow | null>;
+  /** false if the name or the account is already secured */
+  insertAuth(row: AuthRow): Promise<boolean>;
   /** the username registry (server-side, not on chain) */
   nameOwner(nameKey: string): Promise<{ accountId: string; name: string } | null>;
   nameOf(accountId: string): Promise<string | null>;

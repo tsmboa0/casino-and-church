@@ -1,4 +1,4 @@
-import { CHIP_YOCTO, TGAS, bytesToHex, cleanName, humanError, nameClaimMessage, type NewCampaign } from '@cnc/shared';
+import { AUTH_KDF_ITERATIONS, CHIP_YOCTO, TGAS, bytesToHex, cleanName, humanError, keypairFromSecret, nameClaimMessage, signupMessage, type NewCampaign } from '@cnc/shared';
 import { ed25519 } from '@noble/curves/ed25519';
 import { bus } from '../core/bus';
 import {
@@ -7,7 +7,11 @@ import {
 } from '../core/backend';
 import { QUESTS, PARAMS, handTotal, setTableBets } from '../core/rules';
 import { store, type HistRow, type Plot } from '../core/state';
-import { getSession, refreshNonce, wallet } from './auth';
+import { getSession, refreshNonce, resetSession, wallet } from './auth';
+import { deriveKeys, newSaltHex, openSeed, sealSeed } from './accountCrypto';
+import { clearWallet, hasWallet, replaceWalletSecret } from './keystore';
+
+const LINKED = 'cnc.account.v1';
 import { relay } from './relay';
 import { accountBalance, blockTip, dropView, txEvents, txFailureName, txOk, txPanic, viewCall, waitTx } from './rpc';
 import { listen, subscribe } from './sse';
@@ -36,13 +40,22 @@ export class ChainBackend implements Backend {
   async init() {
     // the table limits need no account: load them at once (with retries), so no panel ever offers a refused bet
     const table = this.loadTableSoon();
+    // nobody signed in on this device yet: no wallet is created until they create an account or sign in
+    if (!hasWallet()) { await table; return; }
+    await this.startPlaying();
+    await table;
+  }
+
+  /** once there is a wallet on this device: balances, the welcome chips and the live stream (once per wallet) */
+  private playingFor = '';
+  private async startPlaying() {
     const session = await this.session();
+    if (this.playingFor === session.accountId) return;
+    this.playingFor = session.accountId;
+    this.unlisten?.();
     // the balance and the welcome chips do not depend on each other: start them together
     void this.ensureWelcome().catch(() => { /* retried before the first bet */ });   // the welcome chips show up right away
-    await Promise.all([
-      table,
-      this.refresh().catch(() => { /* a brand-new account lands a moment later; the next action refreshes */ }),
-    ]);
+    await this.refresh().catch(() => { /* a brand-new account lands a moment later; the next action refreshes */ });
     this.unlisten = listen(this.api, session.accountId, {
       agent_decision: (d: AgentDecision) => {
         bus.emit('agentDecision', d);
@@ -117,6 +130,59 @@ export class ChainBackend implements Backend {
   }
 
   private async session() { return getSession(this.api); }
+
+  // ---- username + password accounts (accountCrypto.ts): the server never sees the password or the open wallet key
+  /** the username secured on this device, if any */
+  linkedAccount(): string | null { try { return localStorage.getItem(LINKED); } catch { return null; } }
+  /** a wallet already lives on this device (a guest from before accounts existed, or a signed-in account) */
+  hasDeviceWallet() { return hasWallet(); }
+
+  /** create an account: this device's wallet (new, or the guest one it already has) is sealed with the password */
+  async signUp(username: string, password: string) {
+    const name = cleanName(username);
+    const session = await this.session();                      // creates and funds the wallet if this device has none
+    const salt = newSaltHex();
+    const keys = await deriveKeys(password, salt);
+    const sealed = await sealSeed(keys.enc, session.secret);
+    const ts = Date.now();
+    const signature = bytesToHex(ed25519.sign(new TextEncoder().encode(signupMessage(session.accountId, name, salt, ts)), session.secret));
+    const res = await fetch(`${this.api}/auth/signup`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: name, account_id: session.accountId, salt, iterations: AUTH_KDF_ITERATIONS, auth_key: keys.authHex, wallet_iv: sealed.iv, wallet_ct: sealed.ct, ts, signature }),
+    });
+    const body = await res.json().catch(() => ({})) as { error?: string; message?: string };
+    if (!res.ok) throw new BackendError(body.error ?? 'signup', body.message ?? 'Could not create the account.');
+    localStorage.setItem(LINKED, name);
+    void this.startPlaying().catch(() => {});
+  }
+
+  /** sign in on any device: unlock the sealed wallet with the password and make it this device's wallet */
+  async signIn(username: string, password: string): Promise<{ username: string; avatar: string; toursDone: { casino: boolean; church: boolean } }> {
+    const name = cleanName(username);
+    const saltRes = await fetch(`${this.api}/auth/salt?username=${encodeURIComponent(name)}`);
+    const salt = await saltRes.json().catch(() => ({})) as { salt?: string; iterations?: number; error?: string; message?: string };
+    if (!saltRes.ok || !salt.salt) throw new BackendError(salt.error ?? 'unknown_user', salt.message ?? 'No account with that username.');
+    const keys = await deriveKeys(password, salt.salt, salt.iterations);
+    const res = await fetch(`${this.api}/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: name, auth_key: keys.authHex }) });
+    const body = await res.json().catch(() => ({})) as { username?: string; account_id?: string; wallet_iv?: string; wallet_ct?: string; error?: string; message?: string };
+    if (!res.ok) throw new BackendError(body.error ?? 'bad_login', body.message ?? 'Wrong username or password.');
+    const seed = await openSeed(keys.enc, body.wallet_iv!, body.wallet_ct!);
+    // the seed must be the key of the account the server named (a mix-up must never sign for someone else)
+    if (bytesToHex(keypairFromSecret(seed).publicKey) !== body.account_id) throw new BackendError('bad_login', 'That account did not unlock correctly.');
+    await replaceWalletSecret(seed);
+    resetSession(); this.playingFor = ''; this.welcomeTask = null;
+    localStorage.setItem(LINKED, body.username ?? name);
+    await this.startPlaying();
+    const p = await viewCall(this.contract, 'get_player', { account_id: body.account_id }, 'optimistic').catch(() => null) as { avatar?: string; tour_flags?: number } | null;
+    const flags = Number(p?.tour_flags ?? 0);
+    return { username: body.username ?? name, avatar: p?.avatar || '', toursDone: { casino: (flags & 1) !== 0, church: (flags & 2) !== 0 } };
+  }
+
+  /** sign out: this device forgets the wallet (the account itself is safe behind the username and password) */
+  signOut() {
+    this.unlisten?.(); clearWallet(); resetSession(); this.playingFor = '';
+    try { localStorage.removeItem(LINKED); } catch { /* */ }
+  }
 
   private chips(yocto: string | number): number {
     return Number(BigInt(yocto) / CHIP);
@@ -447,7 +513,8 @@ export class ChainBackend implements Backend {
 
   async checkName(name: string) {
     let account = '';
-    try { account = (await this.session()).accountId; } catch { /* no account yet: any free name is fine */ }
+    // only an existing wallet: typing a name must not create (and fund) one before the account is made
+    if (hasWallet()) try { account = (await this.session()).accountId; } catch { /* no account yet: any free name is fine */ }
     const res = await fetch(`${this.api}/names/check?name=${encodeURIComponent(name)}${account ? `&account=${account}` : ''}`);
     if (!res.ok) return { available: true };                 // the registry is down: never block play on it
     return await res.json() as { available: boolean; reason?: string };

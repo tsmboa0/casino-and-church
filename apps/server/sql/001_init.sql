@@ -111,3 +111,16 @@ CREATE TABLE IF NOT EXISTS usernames (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE bets ADD COLUMN IF NOT EXISTS blessing TEXT;
+
+-- secured accounts: username + password (the server holds no password and cannot decrypt the wallet)
+CREATE TABLE IF NOT EXISTS auth_accounts (
+  name_key TEXT PRIMARY KEY,
+  username TEXT NOT NULL,
+  account_id TEXT NOT NULL UNIQUE,
+  salt TEXT NOT NULL,
+  iterations INTEGER NOT NULL,
+  auth_hash TEXT NOT NULL,
+  wallet_iv TEXT NOT NULL,
+  wallet_ct TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

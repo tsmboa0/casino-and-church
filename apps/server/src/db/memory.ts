@@ -1,4 +1,4 @@
-import type { AccountRow, AttestationRow, BetRow, HostDecisionRow, PlayerRow, SeedRow, Store } from './store.ts';
+import type { AuthRow, AccountRow, AttestationRow, BetRow, HostDecisionRow, PlayerRow, SeedRow, Store } from './store.ts';
 
 export class MemoryStore implements Store {
   accounts = new Map<string, AccountRow>();
@@ -13,6 +13,13 @@ export class MemoryStore implements Store {
   locked = false;
 
   async account(id: string) { return this.accounts.get(id) ?? null; }
+  private auths = new Map<string, AuthRow>();
+  async authByName(key: string) { return this.auths.get(key) ?? null; }
+  async authByAccount(id: string) { for (const a of this.auths.values()) if (a.accountId === id) return a; return null; }
+  async insertAuth(row: AuthRow) {
+    if (this.auths.has(row.nameKey) || (await this.authByAccount(row.accountId))) return false;
+    this.auths.set(row.nameKey, row); return true;
+  }
   private names = new Map<string, { accountId: string; name: string }>();
   async nameOwner(key: string) { return this.names.get(key) ?? null; }
   async nameOf(accountId: string) { for (const v of this.names.values()) if (v.accountId === accountId) return v.name; return null; }

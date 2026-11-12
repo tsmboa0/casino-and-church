@@ -1,3 +1,5 @@
+import { AUTH_KDF_ITERATIONS, signupMessage } from '@cnc/shared';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { base58Decode, bytesToHex, campaignApprovalMessage, campaignClaimMessage, campaignProblem, cleanName, hexToBytes, keypairFromSecret, nameClaimMessage, nameKey, nameProblem, parseSecret, publicKeyString, type NewCampaign } from '@cnc/shared';
 import { ed25519 } from '@noble/curves/ed25519';
 import cors from '@fastify/cors';
@@ -433,6 +435,62 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     await quotaOr429('camp-attest', accountId, 30);
     const exp = expiresNs();
     return { expires_ns: exp, attestation: sign(campaignClaimMessage(id, accountId, exp)) };
+  });
+
+  // ---- username + password accounts. The server keeps a salt, sha256(auth key) and the wallet seed sealed with a key
+  // only the player's device can derive from the password; it never sees the password and cannot decrypt the seed.
+  const hex = (v: unknown, bytes: number) => typeof v === 'string' && v.length === bytes * 2 && /^[0-9a-f]+$/.test(v);
+  const sha = (h: string) => createHash('sha256').update(Buffer.from(h, 'hex')).digest('hex');
+  /** step 1 of sign-in: the salt for this username (the device needs it to derive the keys) */
+  app.get('/auth/salt', async (req) => {
+    const name = cleanName(String((req.query as { username?: string }).username ?? ''));
+    const row = name ? await deps.store.authByName(nameKey(name)) : null;
+    if (!row) throw new HttpError(404, 'unknown_user', 'No account with that username. Check the spelling, or create one.');
+    return { salt: row.salt, iterations: row.iterations };
+  });
+  /** create (or secure an existing guest) account: the wallet's own key signs the upload */
+  app.post('/auth/signup', async (req) => {
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const accountId = String(b.account_id ?? ''), name = cleanName(String(b.username ?? '')), ts = Number(b.ts);
+    const problem = nameProblem(name);
+    if (problem) throw new HttpError(400, 'bad_name', problem);
+    if (!hex(b.salt, 16) || !hex(b.auth_key, 32) || !hex(b.wallet_iv, 12) || !hex(b.wallet_ct, 48) || Number(b.iterations) !== AUTH_KDF_ITERATIONS) {
+      throw new HttpError(400, 'bad_args', 'The account data is malformed.');
+    }
+    if (!Number.isFinite(ts) || Math.abs(Date.now() - ts) > 5 * 60_000) throw new HttpError(400, 'bad_args', 'Your clock looks wrong. Try again.');
+    const acct = await deps.store.account(accountId);
+    if (!acct) throw new HttpError(404, 'unknown_account', 'Your wallet is still being created. Try again in a moment.');
+    let ok = false;
+    try { ok = ed25519.verify(hexToBytes(String(b.signature ?? '')), new TextEncoder().encode(signupMessage(accountId, name, String(b.salt), ts)), hexToBytes(acct.publicKey)); } catch { ok = false; }
+    if (!ok) throw new HttpError(401, 'bad_signature', 'That request was not signed by this wallet.');
+    await quotaOr429('signup', req.ip, 20);
+    if (await deps.store.authByAccount(accountId)) throw new HttpError(409, 'already_secured', 'This wallet already has an account. Sign in instead.');
+    const owner = await deps.store.nameOwner(nameKey(name));
+    if ((owner && owner.accountId !== accountId) || (await deps.store.authByName(nameKey(name)))) throw new HttpError(409, 'name_taken', 'That username is taken. Pick another one.');
+    if (!(await deps.store.claimName(accountId, nameKey(name), name))) throw new HttpError(409, 'name_taken', 'That username is taken. Pick another one.');
+    const inserted = await deps.store.insertAuth({
+      nameKey: nameKey(name), username: name, accountId, salt: String(b.salt), iterations: AUTH_KDF_ITERATIONS,
+      authHash: sha(String(b.auth_key)), walletIv: String(b.wallet_iv), walletCt: String(b.wallet_ct),
+    });
+    if (!inserted) throw new HttpError(409, 'name_taken', 'That username is taken. Pick another one.');
+    return { username: name, account_id: accountId };
+  });
+  /** step 2 of sign-in: the auth key unlocks the sealed wallet (wrong tries are rate-limited per username and per IP) */
+  app.post('/auth/login', async (req) => {
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const name = cleanName(String(b.username ?? ''));
+    if (!name || !hex(b.auth_key, 32)) throw new HttpError(400, 'bad_args', 'Enter your username and password.');
+    const hour = new Date().toISOString().slice(0, 13);
+    const [byName, byIp] = await Promise.all([deps.store.quota('login-fail', nameKey(name), hour), deps.store.quota('login-fail-ip', req.ip, hour)]);
+    if (byName.count >= 10 || byIp.count >= 30) throw new HttpError(429, 'rate_limited', 'Too many wrong passwords. Try again in an hour.', 3600);
+    const row = await deps.store.authByName(nameKey(name));
+    const given = Buffer.from(sha(String(b.auth_key)), 'hex');
+    const good = row ? timingSafeEqual(given, Buffer.from(row.authHash, 'hex')) : false;
+    if (!row || !good) {
+      await Promise.all([deps.store.addQuota('login-fail', nameKey(name), hour, 1, 0), deps.store.addQuota('login-fail-ip', req.ip, hour, 1, 0)]);
+      throw new HttpError(401, 'bad_login', 'Wrong username or password.');
+    }
+    return { username: row.username, account_id: row.accountId, wallet_iv: row.walletIv, wallet_ct: row.walletCt };
   });
 
   // ---- usernames: unique across the game, held by the server (not on chain) ----

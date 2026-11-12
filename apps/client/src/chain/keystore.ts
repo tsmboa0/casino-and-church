@@ -81,3 +81,16 @@ export async function loadWalletSecret(parse: (s: string) => Uint8Array): Promis
 /** true if this device already holds a wallet (either slot) */
 export const hasWallet = () => !!(localStorage.getItem(SEALED) || localStorage.getItem(PLAIN));
 
+
+/** sign-in on this device: the wallet restored from the account replaces whatever this device held */
+export async function replaceWalletSecret(secret: Uint8Array): Promise<boolean> {
+  localStorage.removeItem(SEALED); localStorage.removeItem(PLAIN);
+  if (canSeal()) {
+    try { await seal(secret); return true; } catch { /* fall back to the plain slot */ }
+  }
+  localStorage.setItem(PLAIN, bytesToHex(secret));
+  return false;
+}
+
+/** sign-out: forget this device's wallet (the account itself lives on, behind the username and password) */
+export function clearWallet() { localStorage.removeItem(SEALED); localStorage.removeItem(PLAIN); }

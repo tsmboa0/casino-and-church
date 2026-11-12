@@ -1,5 +1,5 @@
 import './games.css';
-import { store } from '../core/state';
+import { store, clearProfile } from '../core/state';
 import { bus, type PanelKind } from '../core/bus';
 import { audio } from '../core/audio';
 import { backend, BackendError, type BjState, type AgentDecision, type AgentId, type AgentProof, type CampaignRow, type RealmEvent } from '../core/backend';
@@ -1140,7 +1140,7 @@ export function openSettings(m: HTMLElement, close: () => void, act: SettingsAct
           <button class="g-key dark" data-a="skip">SKIP CURRENT TOUR</button></div>
         <div class="st-sec"><h4>ACCOUNT</h4>
           <button class="g-key dark" data-a="key" ${backend.mode === 'mock' ? 'disabled' : ''}>EXPORT MY KEY</button>
-          <button class="g-key danger" data-a="reset">NEW CHARACTER</button>
+          ${backend.signOut ? `<button class="g-key danger" data-a="signout">${backend.linkedAccount?.() ? 'SIGN OUT' : 'SIGN OUT (UNSECURED)'}</button>` : '<button class="g-key danger" data-a="reset">NEW CHARACTER</button>'}
           <div class="st-out" id="out"></div></div>
       </div>
       <p class="st-credit">Art: bubbabba &middot; Jephed, Game Between The Lines (gamebetweenthelines.com) &middot; Music &amp; sound by the team</p>
@@ -1169,6 +1169,13 @@ export function openSettings(m: HTMLElement, close: () => void, act: SettingsAct
         const out = $(root, '#out');
         if (btn.dataset.sure) { act.reset(); return; }
         btn.dataset.sure = '1'; btn.textContent = 'TAP AGAIN TO CONFIRM'; out.textContent = 'This starts over on this device.';
+      }
+      if (a === 'signout') {
+        const out = $(root, '#out');
+        if (btn.dataset.sure) { backend.signOut!(); clearProfile(); location.reload(); return; }
+        btn.dataset.sure = '1'; btn.textContent = 'TAP AGAIN TO SIGN OUT';
+        out.textContent = backend.linkedAccount?.() ? 'Sign back in any time with your username and password.'
+          : 'This account has no password yet: signing out loses it and its chips. Secure it from the title screen first.';
       }
     }));
   };

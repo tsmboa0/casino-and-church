@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
-import type { AccountRow, AttestationRow, BetRow, HostDecisionRow, PlayerRow, SeedRow, Store } from './store.ts';
+import type { AuthRow, AccountRow, AttestationRow, BetRow, HostDecisionRow, PlayerRow, SeedRow, Store } from './store.ts';
 
 const SCHEMA = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../sql/001_init.sql'), 'utf8');
 
@@ -28,6 +28,22 @@ export class PostgresStore implements Store {
     const r = await this.pool.query('select account_id, public_key, ip, created_at from accounts where account_id = $1', [id]);
     const row = r.rows[0];
     return row ? { accountId: row.account_id, publicKey: row.public_key, ip: row.ip, createdAt: new Date(row.created_at).getTime() } : null;
+  }
+  async authByName(key: string) {
+    const r = await this.pool.query('select * from auth_accounts where name_key = $1', [key]);
+    return r.rows[0] ? mapAuth(r.rows[0]) : null;
+  }
+  async authByAccount(id: string) {
+    const r = await this.pool.query('select * from auth_accounts where account_id = $1', [id]);
+    return r.rows[0] ? mapAuth(r.rows[0]) : null;
+  }
+  async insertAuth(a: AuthRow) {
+    const r = await this.pool.query(
+      `insert into auth_accounts (name_key, username, account_id, salt, iterations, auth_hash, wallet_iv, wallet_ct)
+       values ($1,$2,$3,$4,$5,$6,$7,$8) on conflict do nothing`,
+      [a.nameKey, a.username, a.accountId, a.salt, a.iterations, a.authHash, a.walletIv, a.walletCt],
+    );
+    return (r.rowCount ?? 0) > 0;
   }
   async nameOwner(key: string) {
     const r = await this.pool.query('select account_id, name from usernames where name_key = $1', [key]);
@@ -242,6 +258,12 @@ function mapBet(row: Record<string, unknown>): BetRow {
     detail: row.detail == null ? '' : String(row.detail),
     settleMs: row.settle_ms == null ? null : Number(row.settle_ms),
     txHash: row.tx_hash == null ? null : String(row.tx_hash),
+  };
+}
+function mapAuth(row: Record<string, unknown>): AuthRow {
+  return {
+    nameKey: String(row.name_key), username: String(row.username), accountId: String(row.account_id), salt: String(row.salt),
+    iterations: Number(row.iterations), authHash: String(row.auth_hash), walletIv: String(row.wallet_iv), walletCt: String(row.wallet_ct),
   };
 }
 function mapPlayer(row: Record<string, unknown>): PlayerRow {
