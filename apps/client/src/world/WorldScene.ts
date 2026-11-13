@@ -197,6 +197,11 @@ export class WorldScene extends Phaser.Scene {
         this.addGlow(p.x + 113, p.y - 56, 6, 0xff2e4d, 0.7, 0.45);           // LIVE
         continue;
       }
+      if (p.key === 'x/commission') {
+        this.add.image(p.x, p.y, 'commission_tex').setOrigin(0, 1).setDepth(p.y);
+        this.addGlow(p.x + 41, p.y - 30, 14, 0xffb347, 0.55, 0.3);              // the candle
+        continue;
+      }
       if (p.key === 'x/bull' || p.key === 'x/bear') {
         this.add.image(p.x, p.y, p.key === 'x/bull' ? 'bull_tex' : 'bear_tex').setOrigin(0, 1).setDepth(p.y);
         this.addGlow(p.x + 12, p.y - 12, 18, p.key === 'x/bull' ? 0x3dffa0 : 0xff4d6d, 0.32, 0.08);
@@ -231,7 +236,8 @@ export class WorldScene extends Phaser.Scene {
       const el = overlay.make(`sign ${s.kind}`, s.kind === 'gateC' || s.kind === 'gateH' ? '' : s.text);
       // toll-gate: two pillars across the doorway joined by a beam that carries the name
       if (s.kind === 'gateC' || s.kind === 'gateH') { el.innerHTML = `<i class="gp t"></i><b class="gb"><span></span></b><i class="gp d"></i>`; (el.querySelector('span') as HTMLElement).textContent = s.text; }
-      if (s.kind === 'tag' && s.text === 'BTC EXCHANGE') el.classList.add('exch');      // the exchange's name plate is neon, not brass
+      if (s.kind === 'tag' && s.text === 'BTC EXCHANGE') el.classList.add('exch');
+      if (s.kind === 'tag' && s.text === 'COMMISSION DESK') el.classList.add('comm');  // lit like a church notice      // the exchange's name plate is neon, not brass
       this.signEls.push({ el, x: s.x, y: s.y, anchor: s.anchor ?? '-50%, 0', kind: s.kind, plot: s.plot });
     }
   }

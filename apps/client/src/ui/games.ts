@@ -703,7 +703,7 @@ const KIND_TAG = ['SOCIAL', 'PROJECT', 'MACHINE'];
 function missions(root: Root, close: () => void) {
   const hasCamps = !!backend.campaigns;
   shell(root, close, 'church', 'QUEST BOARD', `
-    ${hasCamps ? '<div class="g-tabs" id="qtabs"><button class="on" data-t="q">QUESTS</button><button data-t="c">CAMPAIGNS</button><button data-t="n">OPEN ONE</button></div>' : ''}
+    ${hasCamps ? '<div class="g-tabs" id="qtabs"><button class="on" data-t="q">QUESTS</button><button data-t="c">CAMPAIGNS</button></div>' : ''}
     <div class="qpane" id="qpane"><div class="qlist" id="ql"></div></div>`);
   const pane = $(root, '#qpane');
   // ---- the built-in quests
@@ -729,8 +729,9 @@ function missions(root: Root, close: () => void) {
         <b><span class="ktag k${r.kind}">${KIND_TAG[r.kind]}</span> ${esc(r.title)}</b>
         <small>${machine ? `Play ${r.goal} round${r.goal > 1 ? 's' : ''} on machine #${r.machineId}. Checked on chain.` : `${esc(new URL(r.url).hostname)} &middot; ${r.claims}/${r.maxClaims} done${r.mine ? ' &middot; YOURS' : ''}`}</small>
         ${machine ? `<div class="qbar"><i style="width:${Math.min(100, (r.progress / r.goal) * 100)}%"></i></div>` : `<div class="qbar"><i style="width:${(r.claims / r.maxClaims) * 100}%"></i></div>`}</div>${btn}</div>`;
-    }).join('') || '<div class="g-msg">No campaigns on the board yet. Open one!</div>'}</div>
-    <p class="camp-note">Social tasks are on the honour system: open the link through the Church, then come back. The Father signs your claim and the contract pays it.</p>`;
+    }).join('') || '<div class="g-msg">No campaigns on the board yet.</div>'}</div>
+    <p class="camp-note">Social tasks are on the honour system: open the link through the Church, then come back. The Father signs your claim and the contract pays it.
+      <b>To commission a mission of your own, visit the Commission Desk in the Scriptorium.</b></p>`;
     // START: open the link (outside the Church), start the visit timer, then CLAIM unlocks
     $$(pane, '[data-go]').forEach(b => b.addEventListener('click', async () => {
       const id = +b.dataset.go!, row = rows.find(r => r.id === id)!;
@@ -764,41 +765,7 @@ function missions(root: Root, close: () => void) {
       showResult(root, 'win', 'BLESSED', [r.chips ? `+${r.chips}` : '', r.faith ? `+${r.faith} FAITH` : ''].filter(Boolean).join(' '), 'Campaign complete');
     } catch (e) { oops(root, e); }
   };
-  // ---- open a campaign: funded from your chips, approved by the Church
-  const create = () => {
-    timers.forEach(clearInterval); timers.length = 0;
-    const L = CAMPAIGN_LIMITS;
-    pane.innerHTML = `<form class="camp-form" id="cf">
-      <div class="cf-row"><label>KIND</label><div class="cf-kinds">${['SOCIAL', 'PROJECT', 'MACHINE'].map((k, i) => `<button type="button" class="g-key ${i ? 'dark' : ''}" data-k="${i}">${k}</button>`).join('')}</div></div>
-      <div class="cf-row"><label>TITLE</label><input id="ct" maxlength="60" placeholder="Follow us on X" autocomplete="off" /></div>
-      <div class="cf-row" id="urow"><label>LINK</label><input id="cu" maxlength="160" placeholder="https://x.com/yourproject" autocomplete="off" /></div>
-      <div class="cf-row" id="mrow" hidden><label>MACHINE</label><input id="cm" type="number" min="1" value="1" /><label>PLAYS</label><input id="cg" type="number" min="1" max="50" value="5" /></div>
-      <div class="cf-row"><label>CHIPS EACH</label><input id="cc" type="number" min="0" max="${L.maxRewardChips}" value="2" /><label>FAITH EACH</label><input id="cfa" type="number" min="0" max="5" step="0.5" value="2" /><label>PLAYERS</label><input id="cn" type="number" min="1" max="${L.maxClaims}" value="20" /></div>
-      <div class="cf-cost" id="ccost"></div>
-      <button class="g-go gold wide" type="submit"><span>ASK THE CHURCH</span></button>
-      <p class="camp-note">You need FAITH ${L.creatorMinFaith}. Rewards are paid from your chips up front; ${'10%'} (at least ${L.minListingChips} chips) is tithed to the treasury. The Church refuses wallet, airdrop and giveaway links. Close it any time for a refund of what is left.</p>
-    </form>`;
-    let kind = 0;
-    const v = (id: string) => ($(pane, id) as HTMLInputElement).value;
-    const draft = (): NewCampaign => ({
-      kind, title: v('#ct').trim(), url: kind === 2 ? '' : v('#cu').trim(), machine_id: kind === 2 ? +v('#cm') : 0, goal: kind === 2 ? +v('#cg') : 0,
-      reward_chips: Math.max(0, Math.floor(+v('#cc') || 0)), reward_faith_milli: Math.round((+v('#cfa') || 0) * 1000), max_claims: Math.max(1, Math.floor(+v('#cn') || 1)),
-    });
-    const cost = () => { const d = draft(), c = campaignCost(d), p = campaignProblem(d); $(pane, '#ccost').innerHTML = `${p ? `<span class="bad">${p}</span>` : `COST <b>${c.total}</b> CHIPS <small>(${c.budget} rewards + ${c.listing} tithe)</small>`}`; };
-    $$(pane, '[data-k]').forEach(b => b.addEventListener('click', () => {
-      kind = +b.dataset.k!; $$(pane, '[data-k]').forEach(x => x.classList.toggle('dark', x !== b));
-      ($(pane, '#urow') as HTMLElement).hidden = kind === 2; ($(pane, '#mrow') as HTMLElement).hidden = kind !== 2; cost();
-    }));
-    pane.querySelectorAll('input').forEach(i => i.addEventListener('input', cost)); cost();
-    $(pane, '#cf').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const d = draft(), p = campaignProblem(d); if (p) { oops(root, new BackendError('bad_args', p)); return; }
-      const btn = $(pane, '#cf .g-go');
-      try { const id = await pending(btn, () => backend.createCampaign!(d)); setBal(root); showResult(root, 'win', 'CAMPAIGN OPEN', `#${id}`, 'The Church posted it on the board'); switchTab('c'); }
-      catch (err) { oops(root, err); }
-    });
-  };
-  const switchTab = (t: string) => { $$(root, '#qtabs button').forEach(x => x.classList.toggle('on', x.dataset.t === t)); if (t === 'q') quests(); else if (t === 'c') void campaignsTab(); else create(); };
+  const switchTab = (t: string) => { $$(root, '#qtabs button').forEach(x => x.classList.toggle('on', x.dataset.t === t)); if (t === 'q') quests(); else void campaignsTab(); };
   $$(root, '#qtabs button').forEach(b => b.addEventListener('click', () => { audio.play('hit', 0.25); switchTab(b.dataset.t!); }));
   const render = () => {
     $(root, '#ql').innerHTML = QUESTS.map(q => {
@@ -1043,6 +1010,103 @@ function board(root: Root, close: () => void) {
     timer = window.setInterval(() => { if (!root.querySelector('.bd')) return clearInterval(timer); $$(root, '[data-end]').forEach(b => (b.textContent = mmss(Number(b.dataset.end) - Date.now()))); }, 1000);
   };
   void render();
+}
+
+// ---------------------------------------------------------------------------------------------- THE COMMISSION DESK
+/** my account as plots record it (chain: the account id; demo: the player name) */
+async function myOwnerId(): Promise<string> {
+  if (backend.wallet) { try { return (await backend.wallet()).accountId; } catch { /* no wallet yet */ } }
+  return store.profile?.username ?? 'you';
+}
+function commission(root: Root, close: () => void) {
+  if (!backend.createCampaign) { shell(root, close, 'church', 'THE COMMISSION DESK', '<p class="g-msg">The desk is closed in this mode.</p>'); return; }
+  shell(root, close, 'church', 'THE COMMISSION DESK', `
+    <div class="cm">
+      <div class="cm-who"><div class="ch-face sm"><div class="spr idle" style="${spriteCss('m_bard', 'idle_down', 2)}"></div></div>
+        <p><b>THE SCRIBE</b>&ldquo;Bring me your mission and I will put it before the Father. Once he approves, it goes up on the Quest Board for every wanderer to see.&rdquo;</p></div>
+      <div class="g-tabs" id="ctabs"><button class="on" data-t="new">COMMISSION A MISSION</button><button data-t="mine">YOUR COMMISSIONS</button></div>
+      <div class="qpane" id="cpane"></div>
+    </div>`);
+  const pane = $(root, '#cpane');
+  const L = CAMPAIGN_LIMITS;
+  let mineOwner = '';
+  // ---- the form, with the requirements checked before anything is typed
+  const form = async () => {
+    mineOwner = await myOwnerId();
+    const myMachines = Object.values(store.plots).filter(p => p.owner === mineOwner);
+    pane.innerHTML = `<form class="camp-form" id="cf">
+      <div class="cm-reqs" id="reqs"></div>
+      <div class="cf-row"><label>KIND</label><div class="cf-kinds">${['SOCIAL', 'PROJECT', 'MACHINE'].map((k, i) => `<button type="button" class="g-key ${i ? 'dark' : ''}" data-k="${i}" ${i === 2 && !myMachines.length ? 'disabled title="You need a machine on Founders’ Row"' : ''}>${k}</button>`).join('')}</div></div>
+      <div class="cf-row"><label>TITLE</label><input id="ct" maxlength="60" placeholder="Follow us on X" autocomplete="off" /></div>
+      <div class="cf-row" id="urow"><label>LINK</label><input id="cu" maxlength="160" placeholder="https://x.com/yourproject" autocomplete="off" /></div>
+      <div class="cf-row" id="mrow" hidden><label>MACHINE</label><select id="cm">${myMachines.map(m => `<option value="${m.id}">#${m.id} ${esc(m.name)}</option>`).join('')}</select><label>PLAYS</label><input id="cg" type="number" min="1" max="50" value="5" /></div>
+      <div class="cf-row"><label>CHIPS EACH</label><input id="cc" type="number" min="0" max="${L.maxRewardChips}" value="2" /><label>FAITH EACH</label><input id="cfa" type="number" min="0" max="5" step="0.5" value="2" /><label>PLAYERS</label><input id="cn" type="number" min="1" max="${L.maxClaims}" value="20" /></div>
+      <div class="cf-cost" id="ccost"></div>
+      <button class="g-go gold wide" type="submit" id="send"><span>SUBMIT TO FATHER NAKAMOTO</span></button>
+      <p class="camp-note">Rewards are paid from your chips up front; 10% (at least ${L.minListingChips} chips) is tithed to the treasury. The Father refuses wallet, airdrop and giveaway links. Close it any time from YOUR COMMISSIONS for a refund of what is left.</p>
+    </form>`;
+    let kind = 0;
+    const v = (id: string) => ($(pane, id) as HTMLInputElement).value;
+    const draft = (): NewCampaign => ({
+      kind, title: v('#ct').trim(), url: kind === 2 ? '' : v('#cu').trim(), machine_id: kind === 2 ? +v('#cm') : 0, goal: kind === 2 ? +v('#cg') : 0,
+      reward_chips: Math.max(0, Math.floor(+v('#cc') || 0)), reward_faith_milli: Math.round((+v('#cfa') || 0) * 1000), max_claims: Math.max(1, Math.floor(+v('#cn') || 1)),
+    });
+    // the checks: FAITH, chips for this cost, a machine for a MACHINE mission. Each says what to do about it.
+    const check = () => {
+      const d = draft(), c = campaignCost(d), p = campaignProblem(d);
+      const faithOk = store.eco.faith >= L.creatorMinFaith, chipsOk = store.eco.chips >= c.total, machineOk = kind !== 2 || myMachines.length > 0;
+      const req = (ok: boolean, text: string, fix: string) => `<div class="cm-req ${ok ? 'ok' : 'no'}"><i>${ok ? '&#10003;' : '&#10007;'}</i><span>${text}${ok ? '' : `<small>${fix}</small>`}</span></div>`;
+      $(pane, '#reqs').innerHTML =
+        req(faithOk, `FAITH ${Math.floor(store.eco.faith)} of ${L.creatorMinFaith} needed`, 'Light a candle, tithe at the Offering Box or offer LUCK at the Altar.') +
+        req(chipsOk, `${fmt(store.eco.chips)} chips, ${fmt(c.total)} needed for this mission`, 'Buy chips at the Cashier by the casino door, or ask for fewer players.') +
+        (kind === 2 ? req(machineOk, 'You own a machine on Founders’ Row', 'Only a machine’s owner can commission plays on it.') : '');
+      $(pane, '#ccost').innerHTML = p ? `<span class="bad">${p}</span>` : `COST <b>${fmt(c.total)}</b> CHIPS <small>(${fmt(c.budget)} rewards + ${fmt(c.listing)} tithe)</small>`;
+      ($(pane, '#send') as HTMLButtonElement).disabled = !(faithOk && chipsOk && machineOk) || !!p;
+    };
+    $$(pane, '[data-k]').forEach(b => b.addEventListener('click', () => {
+      if ((b as HTMLButtonElement).disabled) return;
+      kind = +b.dataset.k!; $$(pane, '[data-k]').forEach(x => x.classList.toggle('dark', x !== b));
+      ($(pane, '#urow') as HTMLElement).hidden = kind === 2; ($(pane, '#mrow') as HTMLElement).hidden = kind !== 2; check();
+    }));
+    pane.querySelectorAll('input, select').forEach(i => i.addEventListener('input', check)); check();
+    $(pane, '#cf').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const d = draft(), p = campaignProblem(d); if (p) { oops(root, new BackendError('bad_args', p)); return; }
+      // the Father reads it: a short moment that makes the approval visible
+      const veil = document.createElement('div'); veil.className = 'cm-veil';
+      veil.innerHTML = `<div class="ch-face"><div class="spr idle" style="${spriteCss('m_monk', 'idle_down', 4)}"></div></div><b>FATHER NAKAMOTO</b><span>is reading your request&hellip;</span><i class="mk-spin"></i>`;
+      root.querySelector('.gm')!.append(veil);
+      try {
+        const [id] = await Promise.all([backend.createCampaign!(d), sleep(1800)]);
+        veil.remove(); setBal(root);
+        showResult(root, 'win', 'APPROVED', `#${id}`, 'The Father blessed it. It is on the Quest Board now.');
+        switchTab('mine');
+      } catch (err) {
+        veil.remove();
+        showResult(root, 'push', 'THE FATHER REFUSED', '', errText(err));
+      }
+    });
+  };
+  // ---- the missions you commissioned: progress, and CLOSE for a refund
+  const mine = async () => {
+    pane.innerHTML = '<div class="g-msg">Reading the ledger...</div>';
+    let rows: CampaignRow[] = [];
+    try { rows = (await backend.campaigns?.()) ?? []; } catch (e) { pane.innerHTML = `<div class="g-msg">${errText(e)}</div>`; return; }
+    const own = rows.filter(r => r.mine);
+    pane.innerHTML = `<div class="qlist">${own.map(r => `<div class="qcard camp ${r.active ? 'ready' : 'locked'}"><div class="qi">
+        <b><span class="ktag k${r.kind}">${KIND_TAG[r.kind]}</span> ${esc(r.title)}</b>
+        <small>${r.claims}/${r.maxClaims} done &middot; ${r.rewardChips} chips${r.rewardFaith ? ` + ${r.rewardFaith} FAITH` : ''} each${r.active ? '' : ' &middot; CLOSED'}</small>
+        <div class="qbar"><i style="width:${(r.claims / r.maxClaims) * 100}%"></i></div></div>
+        ${r.active ? `<button class="seal" data-close="${r.id}">CLOSE<small>refund the rest</small></button>` : '<button class="seal" disabled>CLOSED</button>'}</div>`).join('')
+      || '<div class="g-msg">You have not commissioned a mission yet.</div>'}</div>`;
+    $$(pane, '[data-close]').forEach(b => b.addEventListener('click', async () => {
+      if (!confirm('Close this mission? Whatever is left of its budget comes back to you.')) return;
+      try { await pending(b, () => backend.closeCampaign!(+b.dataset.close!)); setBal(root); void mine(); } catch (e) { oops(root, e); }
+    }));
+  };
+  const switchTab = (t: string) => { $$(root, '#ctabs button').forEach(x => x.classList.toggle('on', x.dataset.t === t)); if (t === 'mine') void mine(); else void form(); };
+  $$(root, '#ctabs button').forEach(b => b.addEventListener('click', () => { audio.play('hit', 0.25); switchTab(b.dataset.t!); }));
+  void form();
 }
 
 // ---------------------------------------------------------------------------------------------- BTC EXCHANGE (UP/DOWN)
@@ -1428,7 +1492,7 @@ export function openSettings(m: HTMLElement, close: () => void, act: SettingsAct
 
 // ---------------------------------------------------------------------------------------------- registry
 const GAMES: Partial<Record<PanelKind, (root: Root, close: () => void, id?: string) => void>> = {
-  monitor, ledger, board, market,
+  monitor, ledger, board, market, commission,
   chat: (root, close, id) => hostChat(root, close, id === 'nakamoto' ? 'nakamoto' : 'fortuna'),
   slots, coinflip, dice, roulette, blackjack, cashier, offering, candles, missions, altar, confessional, wheel: fortune,
   harmony: (root, close) => harmony(root, close),

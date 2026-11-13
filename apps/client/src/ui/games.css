@@ -686,3 +686,22 @@
 .mk-h b.mk-t { font-size: 11px; }
 @media (prefers-reduced-motion: reduce) { .mk-t, .mk-t.hot { animation: none; } }
 .mk-tlx .mk-t { font-size: 11px; } @media (max-height: 430px) { .mk-tlx .mk-t { font-size: 9px; } }
+/* the Commission Desk */
+.cm { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.cm-who { display: flex; gap: 10px; align-items: center; padding: 6px 8px; background: rgba(240,184,74,.08); box-shadow: inset 0 0 0 1px rgba(240,184,74,.35); }
+.cm-who .ch-face { flex: none; } .cm-who p { margin: 0; font-size: 12px; line-height: 1.35; color: #f4ead5; } .cm-who p b { display: block; font-family: var(--f-cap); font-size: 8px; letter-spacing: .14em; color: #f0b84a; margin-bottom: 2px; }
+.cm .qpane { overflow-y: auto; overscroll-behavior: contain; max-height: calc(var(--vvh, 100vh) - 230px); }
+.cm-reqs { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+.cm-req { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; padding: 4px 6px; background: rgba(0,0,0,.25); }
+.cm-req i { font-style: normal; font-weight: 700; width: 14px; text-align: center; } .cm-req small { display: block; font-size: 11px; color: #ffb3bf; margin-top: 1px; }
+.cm-req.ok i { color: #7dffb0; } .cm-req.no i { color: #ff6d86; } .cm-req.no span { color: #fff; }
+.cm select { flex: 1; min-width: 0; font: inherit; color: #f4ead5; background: rgba(0,0,0,.35); border: 0; padding: 6px; box-shadow: inset 0 0 0 1px rgba(244,234,213,.25); }
+.cm .g-go:disabled { filter: grayscale(.8) brightness(.55); }
+.cm-veil { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: rgba(18,15,28,.9); text-align: center; }
+.cm-veil b { font-family: var(--f-cap); font-size: 11px; letter-spacing: .14em; color: #ffe58a; } .cm-veil span { font-size: 13px; color: #f4ead5; font-style: italic; }
+.camp-note b { color: #ffe58a; font-weight: 400; }
+.cf-row[hidden] { display: none; }
+.cm-who { padding: 4px 8px; } .cm-who .ch-face.sm { width: 40px; height: 40px; overflow: hidden; display: grid; place-items: center; }
+.cm-who p { font-size: 11px; }
+.cm .camp-form { gap: 6px; }
+.cm .camp-form .cf-row input[type=number] { width: 64px; flex: 0 0 64px; }

@@ -47,12 +47,60 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
   // never scroll, never clip: scale the current screen to fit whatever the window is
   const fit = () => {
     const c = root.firstElementChild as HTMLElement | null; if (!c) return;
+    if (root.classList.contains('kb')) return;                       // the keyboard strip places itself
     c.style.transform = ''; c.style.setProperty('--fit', '1');
     const sc = Math.min(1, ((root.clientHeight || window.innerHeight) - 20) / c.offsetHeight, ((root.clientWidth || window.innerWidth) - 20) / c.offsetWidth);
     if (sc < 1) c.style.transform = `scale(${sc})`;
   };
   new MutationObserver(() => requestAnimationFrame(fit)).observe(root, { childList: true });
   window.addEventListener('resize', fit);
+
+  // ---- the landscape keyboard. On a phone held sideways the keyboard covers most of the screen, so while a field is
+  // focused the card becomes a strip pinned to the top of what is still visible: the field's label, the field itself,
+  // its hint and the main button. It is the real input (autofill and password managers keep working).
+  const phoneSideways = () => matchMedia('(pointer: coarse)').matches && window.innerWidth > window.innerHeight && window.innerHeight < 560;
+  let kbTimer = 0;
+  const placeStrip = () => {
+    const vv = window.visualViewport;
+    root.style.setProperty('--kb-top', `${vv ? vv.offsetTop : 0}px`);
+    root.style.setProperty('--kb-h', `${vv ? vv.height : window.innerHeight}px`);
+  };
+  const stripOn = (input: HTMLInputElement) => {
+    const card = root.querySelector('.ob.card') as HTMLElement | null; if (!card) return;
+    window.clearTimeout(kbTimer);
+    // marked with a data attribute: the screens rewrite their hints' classes as you type
+    const keep = (e: Element | null | undefined) => e?.setAttribute('data-kb', '1');
+    card.querySelectorAll('[data-kb]').forEach(e => e.removeAttribute('data-kb'));
+    const field = input.closest('.field'); keep(field);
+    // only the field being typed in: its siblings (a second password box, the dice) wait until the keyboard closes
+    card.querySelectorAll('[data-kbin]').forEach(e => e.removeAttribute('data-kbin'));
+    input.setAttribute('data-kbin', '1');
+    // the hint that belongs to this field: the next .hint before any other field
+    let sib = field?.nextElementSibling ?? null;
+    while (sib && !sib.classList.contains('hint')) sib = sib.classList.contains('field') ? null : sib.nextElementSibling;
+    keep(sib);
+    keep(card.querySelector(':scope > .row'));
+    let label = card.querySelector(':scope > .kb-label') as HTMLElement | null;
+    if (!label) { label = document.createElement('div'); label.className = 'kb-label'; card.prepend(label); }
+    keep(label);
+    label.textContent = (input.placeholder || 'Type here').replace(/\s*\(.*\)$/, '').toUpperCase();
+    card.style.transform = '';
+    root.classList.add('kb'); placeStrip();
+  };
+  const stripOff = () => {
+    kbTimer = window.setTimeout(() => { root.classList.remove('kb'); root.querySelector('.kb-label')?.remove(); requestAnimationFrame(fit); }, 150);
+  };
+  // Enter on the phone keyboard just finishes this field: the keyboard closes and the whole card comes back (the
+  // screens' own Enter handlers, which submit, are not reached while the strip is up)
+  root.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || !root.classList.contains('kb')) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    (e.target as HTMLElement).blur?.();
+  }, true);
+  root.addEventListener('focusin', (e) => { const t = e.target; if (t instanceof HTMLInputElement && phoneSideways()) stripOn(t); });
+  root.addEventListener('focusout', () => { if (root.classList.contains('kb')) stripOff(); });
+  window.visualViewport?.addEventListener('resize', () => { if (root.classList.contains('kb')) placeStrip(); });
+  window.visualViewport?.addEventListener('scroll', () => { if (root.classList.contains('kb')) placeStrip(); });
 
   const dots = (n: number) => `<div class="dots">${[1, 2, 3].map(i => `<i class="${i === n ? 'on' : i < n ? 'done' : ''}"></i>`).join('')}</div>`;
   const finish = (p: Profile) => { root.className = ''; root.innerHTML = ''; onDone(p); };

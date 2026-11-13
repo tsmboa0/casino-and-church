@@ -63,7 +63,7 @@ export interface World {
 const pad = (n: number) => String(n).padStart(3, '0');
 const T = TILE;
 /** generated textures (PreloadScene) that props can use */
-const GEN: Sizes = { 'x/confess': { w: 48, h: 48 }, 'x/ledger': { w: 32, h: 24 }, 'x/board': { w: 64, h: 48 }, 'x/craps': { w: 128, h: 64 }, 'x/pillar': { w: 16, h: 48 }, 'x/fortune': { w: 48, h: 72 }, 'x/harmony': { w: 48, h: 72 }, 'x/tradewall': { w: 128, h: 64 }, 'x/bull': { w: 24, h: 24 }, 'x/bear': { w: 24, h: 24 } };
+const GEN: Sizes = { 'x/confess': { w: 48, h: 48 }, 'x/ledger': { w: 32, h: 24 }, 'x/board': { w: 64, h: 48 }, 'x/craps': { w: 128, h: 64 }, 'x/pillar': { w: 16, h: 48 }, 'x/fortune': { w: 48, h: 72 }, 'x/harmony': { w: 48, h: 72 }, 'x/tradewall': { w: 128, h: 64 }, 'x/bull': { w: 24, h: 24 }, 'x/bear': { w: 24, h: 24 }, 'x/commission': { w: 48, h: 40 } };
 
 function hash(x: number, y: number): number {
   let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) >>> 0;
@@ -414,9 +414,13 @@ export function buildWorld(sizes: Sizes): World {
 
   // ---- the scriptorium (SE)
   [77, 80, 83].forEach(x => P('m/manor/manor_bookcase', x, 13));
-  [78, 82].forEach(x => P('m/manor/writing_desk', x, 17)); P('m/manor/chess_table', 85, 17); P('m/chapel/lectern', 80, 19);
+  [78, 82].forEach(x => P('m/manor/writing_desk', x, 17)); P('m/manor/chess_table', 85, 17);
   [77, 86].forEach(x => P('m/manor/candelabra', x, 17, { glow: CANDLE }));
-  patron('p-scribe', 'm_bard', 'Scribe', 81, 15.2, 'down');
+  // ---- THE COMMISSION DESK: where projects (and players) commission missions for the Quest Board. The scribe keeps it.
+  P('x/commission', 79, 20, { solid: { x: 2, y: 18, w: 44, h: 22 } });
+  patron('p-scribe', 'm_bard', 'Scribe', 80.5, 18.1, 'down');                           // the clerk, behind the desk
+  light(80.5, 19.2, 54, 0xffc46a, 0.42, 0.12);
+  interactables.push({ id: 'commission', kind: 'commission', label: 'Commission Desk', rect: area(79, 21, 3, 1.3) });
 
   // ---- pilgrims' hall (south-east)
   P('m/tavern/tavern_hearth', 78, 28, { glow: { color: 0xff7a2a, r: 60, a: 0.42, dx: 24, dy: -18, flicker: 0.16 } });
@@ -491,7 +495,7 @@ export function buildWorld(sizes: Sizes): World {
   tag(13, 12.5, 'BLACKJACK'); tag(21.5, 12.5, 'ROULETTE'); tag(34.5, 12.5, 'COIN FLIP');
   tag(5.5, 21.5, 'LOUNGE & BAR'); tag(20, 21.5, "FOUNDERS' PLOTS"); tag(36.6, 21.5, 'DICE DEN');
   tag(43, 2.5, 'HARMONY WHEEL'); tag(43, 15.4, 'THE WORD AT THE CROSSROADS');  tag(48.5, 5.4, 'QUEST BOARD'); tag(50.5, 22.4, 'CONFESSIONAL'); tag(52, 2.4, 'VOTIVE CANDLES'); tag(51, 16.6, 'OFFERING BOX');
-  tag(81.8, 6.9, 'SANCTUM'); tag(79.5, 9.35, 'THE LEDGER'); tag(82, 11.0, 'SCRIPTORIUM'); tag(78, 21.4, "PILGRIMS' HALL"); tag(53.5, 21.4, 'CLOISTER');
+  tag(81.8, 6.9, 'SANCTUM'); tag(79.5, 9.35, 'THE LEDGER'); tag(82, 11.0, 'SCRIPTORIUM'); tag(80.5, 22.75, 'COMMISSION DESK'); tag(74.5, 21.4, "PILGRIMS' HALL"); tag(53.5, 21.4, 'CLOISTER');
 
   return { plots, ops, bars, props, colliders, lights, shafts, interactables, npcs, doors, signs, spawns, hosts, routes, plazaCenter };
 }

@@ -28,7 +28,7 @@ export const CHURCH_STOPS: TourStop[] = [
   { wp: 2, gesture: 'point_up', mark: [51.5, 3.5], lines: ['The votive candles. Light one each day and your FAITH deepens.', 'The longer you linger here, the more your LUCK runs dry.'] },
   { wp: 3, gesture: 'point_left', mark: [48, 6], lines: ['The Quest Board. Simple deeds, honest rewards.'] },
   { wp: 4, gesture: 'point_up', mark: [65.5, 3.5], lines: ['The Altar. Offer your LUCK and it becomes FAITH.', 'When both burn above fifty, the Harmony Wheel at the Crossroads will turn for you.'] },
-  { wp: 5, gesture: 'point_up', mark: [81, 12.5], lines: ['The Scriptorium. Our whitepapers are kept here, as scripture.'] },
+  { wp: 5, gesture: 'point_up', mark: [81, 12.5], lines: ['The Scriptorium. Our whitepapers are kept here, as scripture.', 'The Commission Desk is here too. Projects commission missions for the Quest Board, and I read every one before it is posted.'] },
   { wp: 6, gesture: 'point_up', mark: [79, 26], lines: ["The Pilgrims' Hall. Rest, eat, and hear the faithful argue about tomorrow."] },
   { wp: 8, face: 'down', mark: [81.5, 3.5], lines: ['My sanctum. The Ledger beside my door holds the treasury and my sermons.', 'I tend this Church myself: Vigils, alms for the poor, the blessings. Every choice is signed and on chain.', 'The Word at the Crossroads shows what Don Fortuna and I are up to. Balance is survival, wanderer.'] },
 ];

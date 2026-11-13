@@ -194,6 +194,22 @@ export class PreloadScene extends Phaser.Scene {
       }
     });
     statue('bull_tex', true); statue('bear_tex', false);
+    // ----- THE COMMISSION DESK: a heavy desk, an open ledger, quill and ink, a red wax seal, a candle, a brass plate
+    mk('commission_tex', 48, 40, c => {
+      const r = (x: number, y: number, w: number, h: number, f: string) => { c.fillStyle = f; c.fillRect(x, y, w, h); };
+      r(1, 18, 46, 22, '#14101c'); r(2, 18, 44, 20, '#6b3a1a'); r(2, 18, 44, 3, '#a86a32'); r(2, 21, 44, 1, '#3a1f0e');   // desk top + front
+      r(4, 24, 18, 11, '#4a2810'); r(26, 24, 18, 11, '#4a2810'); r(12, 28, 2, 2, '#f0b84a'); r(34, 28, 2, 2, '#f0b84a');  // drawers
+      r(18, 34, 12, 4, '#14101c'); r(19, 34, 10, 3, '#c9a24a'); r(20, 35, 8, 1, '#7a5a1a');                                 // brass plate
+      r(3, 38, 4, 2, '#2a160a'); r(41, 38, 4, 2, '#2a160a');                                                                // feet
+      // the open ledger on the desk
+      r(8, 8, 26, 12, '#14101c'); r(9, 9, 12, 10, '#efe2c0'); r(21, 9, 12, 10, '#fbf3dc'); r(20, 9, 2, 10, '#b8a070');
+      for (let i = 0; i < 4; i++) { r(11, 11 + i * 2, 8 - (i % 2) * 2, 1, '#8a7448'); r(23, 11 + i * 2, 7 - ((i + 1) % 2) * 2, 1, '#8a7448'); }
+      r(27, 15, 4, 4, '#c4202e'); r(28, 16, 2, 2, '#8a0f20');                                                                // wax seal
+      // ink pot and quill
+      r(5, 12, 4, 5, '#14101c'); r(6, 13, 2, 3, '#2a2a4a'); r(7, 2, 1, 11, '#fff3dc'); r(6, 3, 1, 6, '#e8dcc0'); r(8, 4, 1, 4, '#e8dcc0');
+      // the candle
+      r(39, 9, 4, 10, '#14101c'); r(40, 10, 2, 9, '#f4ead5'); r(40, 6, 2, 4, '#ffb347'); r(40, 7, 2, 2, '#fff3b0'); r(37, 18, 8, 2, '#c9a24a');
+    });
     // ----- a full-size craps table (the pack's one is far smaller than the other tables)
     mk('craps_tex', 128, 64, c => {
       const r = (x: number, y: number, w: number, h: number, f: string) => { c.fillStyle = f; c.fillRect(x, y, w, h); };
