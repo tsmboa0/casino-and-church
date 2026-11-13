@@ -4,6 +4,7 @@ import { store, clearProfile, type Profile } from '../core/state';
 import { atlasDom } from '../core/atlasDom';
 import { icon } from './icons';
 import { backend } from '../core/backend';
+import { bus } from '../core/bus';
 import { NAME_MAX, PASSWORD_MIN, cleanName, nameProblem, passwordProblem } from '@cnc/shared';
 
 let MANIFEST: any = null;
@@ -253,7 +254,78 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
     next.addEventListener('click', () => void proceed());
   };
 
-  // ---------------------------------------------------------------- the backstory: an open book, typed by hand
+  // ---------------------------------------------------------------- the backstory (new players, before the character)
+  const storyStep = () => openBook(root, avatarStep);
+
+  // ---------------------------------------------------------------- 2. avatar
+  const avatarStep = () => {
+    root.innerHTML = `
+    <div class="ob card wide px">
+      ${dots(2)}
+      <h2>Choose your wanderer</h2>
+      <div class="av-wrap">
+        <div class="av-grid" id="grid">
+          ${AVATARS.map(a => `<button class="av ${a.id === draft.avatar ? 'sel' : ''}" data-id="${a.id}" aria-label="${a.name}"><div class="spr idle" style="${spriteCss(a.id, 'idle_down', k)}"></div><span>${a.name.replace('The ', '')}</span></button>`).join('')}
+        </div>
+        <div class="av-prev px2">
+          <div class="stage"><div class="spr walk" id="prev" style="${spriteCss(draft.avatar, 'walk_down', k + 2)}"></div><div class="shadow"></div></div>
+          <b id="av-name"></b><small id="av-blurb"></small>
+        </div>
+      </div>
+      <div class="row">${draft.created || draft.signedIn ? '' : '<button class="btn ghost" id="back">BACK</button>'}<button class="btn ghost" id="lore">&#128214; BACKSTORY</button><button class="btn big" id="next">NEXT</button></div>
+    </div>`;
+    const upd = () => {
+      const a = AVATARS.find(x => x.id === draft.avatar)!;
+      (root.querySelector('#prev') as HTMLElement).setAttribute('style', spriteCss(a.id, 'walk_down', k + 2));
+      root.querySelector('#av-name')!.textContent = a.name; root.querySelector('#av-blurb')!.textContent = a.blurb;
+      root.querySelectorAll('.av').forEach(b => b.classList.toggle('sel', (b as HTMLElement).dataset.id === a.id));
+    };
+    root.querySelectorAll<HTMLElement>('.av').forEach(b => b.addEventListener('click', () => { draft.avatar = b.dataset.id!; upd(); }));
+    upd();
+    root.querySelector('#back')?.addEventListener('click', nameStep);
+    root.querySelector('#lore')!.addEventListener('click', () => storyStep());   // the book again; START comes back here
+    root.querySelector('#next')!.addEventListener('click', howStep);
+  };
+
+  // ---------------------------------------------------------------- 3. how to play
+  const howStep = () => {
+    root.innerHTML = `
+    <div class="ob card wide px howcard">
+      ${dots(3)}
+      <h2>How to play</h2>
+      ${howToHtml()}
+      <div class="row"><button class="btn ghost" id="back">BACK</button><button class="btn big" id="go">LET'S GO</button></div>
+    </div>`;
+    playHowTo(root);
+    root.querySelector('#back')!.addEventListener('click', avatarStep);
+    root.querySelector('#go')!.addEventListener('click', () => finish({ username: draft.name, avatar: draft.avatar, startRealm: 'plaza' as any, toursDone: draft.signedIn?.toursDone ?? { casino: false, church: false } }));
+  };
+
+  title();
+}
+
+/** "Tap to start": the first user gesture, which is what lets the browser play music from the home page on. */
+export function showSplash(onTap: () => void): Promise<void> {
+  return new Promise((res) => {
+    const root = document.getElementById('onboarding')!;
+    root.className = 'show';
+    root.innerHTML = `
+    <div class="ob title split splash">
+      ${WING_CASINO}
+      <div class="mid spacer"><span class="and">&amp;</span></div>
+      ${WING_CHURCH}
+      <p class="tagline wide">Balance is survival.</p>
+      <div class="under">
+        <div class="tap">TAP TO START</div>
+        <small class="fine">Best played in landscape with sound on${(/iPhone|iPad/.test(navigator.userAgent) && !(navigator as any).standalone) ? '<br>For full screen: Share \u2192 Add to Home Screen' : ''}</small>
+      </div>
+    </div>`;
+    const go = () => { window.removeEventListener('keydown', go); root.removeEventListener('pointerdown', go); onTap(); res(); };
+    root.addEventListener('pointerdown', go); window.addEventListener('keydown', go);
+  });
+}
+
+// ---------------------------------------------------------------- the backstory: an open book, typed by hand
   // paragraphs of lines (each line starts on its own row; a paragraph adds space before the next)
   const STORY: string[][] = [
     ['Most believe crypto is one thing. They are wrong.'],
@@ -267,7 +339,8 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
     ['Balance is survival.', 'LUCK fuels FAITH.', 'FAITH shapes LUCK.', 'Together, they decide your fate.'],
     ['Welcome to The Casino and The Church.'],
   ];
-  const storyStep = () => {
+export function openBook(root: HTMLElement, onDone: () => void, doneLabel = 'START', skipLabel = 'SKIP') {
+  {
     root.innerHTML = `
     <div class="ob storybook">
       <div class="book">
@@ -275,7 +348,7 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
         <div class="spine"></div>
         <div class="page right" id="pr"><div class="flow" id="fr"></div><span class="folio">ii</span></div>
       </div>
-      <div class="bk-bar"><button class="btn ghost" id="skip">SKIP</button><button class="btn big pulse" id="start" hidden>START</button></div>
+      <div class="bk-bar"><button class="btn ghost" id="skip">${skipLabel}</button><button class="btn big pulse" id="start" hidden>${doneLabel}</button></div>
     </div>`;
     const book = root.querySelector('.book') as HTMLElement;
     const pages = [root.querySelector('#fl') as HTMLElement, root.querySelector('#fr') as HTMLElement];
@@ -357,79 +430,20 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
       (root.querySelector('#skip') as HTMLElement).hidden = true;
       (root.querySelector('#start') as HTMLElement).hidden = false;
     };
-    const leave = () => { alive = false; window.clearTimeout(timer); window.removeEventListener('keydown', onKey); avatarStep(); };
+    const leave = () => { alive = false; window.clearTimeout(timer); window.removeEventListener('keydown', onKey); onDone(); };
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!(root.querySelector('#start') as HTMLElement).hidden) leave(); else fast = true; } };
     window.addEventListener('keydown', onKey);
     book.addEventListener('click', () => { fast = true; });                 // tap the book: the typist hurries
     root.querySelector('#skip')!.addEventListener('click', leave);
     root.querySelector('#start')!.addEventListener('click', leave);
     void run().catch(() => { /* a page too small to type on: let them go on */ (root.querySelector('#start') as HTMLElement).hidden = false; });
-  };
-
-  // ---------------------------------------------------------------- 2. avatar
-  const avatarStep = () => {
-    root.innerHTML = `
-    <div class="ob card wide px">
-      ${dots(2)}
-      <h2>Choose your wanderer</h2>
-      <div class="av-wrap">
-        <div class="av-grid" id="grid">
-          ${AVATARS.map(a => `<button class="av ${a.id === draft.avatar ? 'sel' : ''}" data-id="${a.id}" aria-label="${a.name}"><div class="spr idle" style="${spriteCss(a.id, 'idle_down', k)}"></div><span>${a.name.replace('The ', '')}</span></button>`).join('')}
-        </div>
-        <div class="av-prev px2">
-          <div class="stage"><div class="spr walk" id="prev" style="${spriteCss(draft.avatar, 'walk_down', k + 2)}"></div><div class="shadow"></div></div>
-          <b id="av-name"></b><small id="av-blurb"></small>
-        </div>
-      </div>
-      <div class="row">${draft.created || draft.signedIn ? '' : '<button class="btn ghost" id="back">BACK</button>'}<button class="btn ghost" id="lore">&#128214; BACKSTORY</button><button class="btn big" id="next">NEXT</button></div>
-    </div>`;
-    const upd = () => {
-      const a = AVATARS.find(x => x.id === draft.avatar)!;
-      (root.querySelector('#prev') as HTMLElement).setAttribute('style', spriteCss(a.id, 'walk_down', k + 2));
-      root.querySelector('#av-name')!.textContent = a.name; root.querySelector('#av-blurb')!.textContent = a.blurb;
-      root.querySelectorAll('.av').forEach(b => b.classList.toggle('sel', (b as HTMLElement).dataset.id === a.id));
-    };
-    root.querySelectorAll<HTMLElement>('.av').forEach(b => b.addEventListener('click', () => { draft.avatar = b.dataset.id!; upd(); }));
-    upd();
-    root.querySelector('#back')?.addEventListener('click', nameStep);
-    root.querySelector('#lore')!.addEventListener('click', () => storyStep());   // the book again; START comes back here
-    root.querySelector('#next')!.addEventListener('click', howStep);
-  };
-
-  // ---------------------------------------------------------------- 3. how to play
-  const howStep = () => {
-    root.innerHTML = `
-    <div class="ob card wide px howcard">
-      ${dots(3)}
-      <h2>How to play</h2>
-      ${howToHtml()}
-      <div class="row"><button class="btn ghost" id="back">BACK</button><button class="btn big" id="go">LET'S GO</button></div>
-    </div>`;
-    playHowTo(root);
-    root.querySelector('#back')!.addEventListener('click', avatarStep);
-    root.querySelector('#go')!.addEventListener('click', () => finish({ username: draft.name, avatar: draft.avatar, startRealm: 'plaza' as any, toursDone: draft.signedIn?.toursDone ?? { casino: false, church: false } }));
-  };
-
-  title();
+  }
 }
 
-/** "Tap to start": the first user gesture, which is what lets the browser play music from the home page on. */
-export function showSplash(onTap: () => void): Promise<void> {
-  return new Promise((res) => {
-    const root = document.getElementById('onboarding')!;
-    root.className = 'show';
-    root.innerHTML = `
-    <div class="ob title split splash">
-      ${WING_CASINO}
-      <div class="mid spacer"><span class="and">&amp;</span></div>
-      ${WING_CHURCH}
-      <p class="tagline wide">Balance is survival.</p>
-      <div class="under">
-        <div class="tap">TAP TO START</div>
-        <small class="fine">Best played in landscape with sound on${(/iPhone|iPad/.test(navigator.userAgent) && !(navigator as any).standalone) ? '<br>For full screen: Share \u2192 Add to Home Screen' : ''}</small>
-      </div>
-    </div>`;
-    const go = () => { window.removeEventListener('keydown', go); root.removeEventListener('pointerdown', go); onTap(); res(); };
-    root.addEventListener('pointerdown', go); window.addEventListener('keydown', go);
-  });
+/** the backstory book over the game (from Settings): the world waits while it is open */
+export function showBackstory() {
+  const root = document.getElementById('onboarding')!;
+  root.className = 'show';
+  bus.emit('modalOpened');
+  openBook(root, () => { root.className = ''; root.innerHTML = ''; bus.emit('modalClosed'); }, 'CLOSE THE BOOK', 'CLOSE');
 }

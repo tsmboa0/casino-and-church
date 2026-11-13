@@ -8,7 +8,7 @@ import {
 } from '../core/backend';
 import { CAMPAIGN_LIMITS, campaignCost, campaignProblem, type NewCampaign } from '@cnc/shared';
 import { verifyProof, SAMPLE_PROOF } from './aiverify';
-import { spriteCss } from './onboarding';
+import { spriteCss, showBackstory } from './onboarding';
 import {
   SLOT_SYMS, SLOT_TRIPLE, COIN_PAY_BPS, DICE_OU_BPS, DICE_SEVEN_BPS, ROULETTE_PICK, RED, QUESTS, PARAMS,
   CHIPS_PER_NEAR, PLOT_GATE, plotPlayableBankroll, MACHINE_SKINS, blessingOf,
@@ -1443,7 +1443,7 @@ export function openSettings(m: HTMLElement, close: () => void, act: SettingsAct
           <button class="tg ${get('cnc.haptics') === '0' ? '' : 'on'}" data-a="haptics"><span>VIBRATION</span><i></i></button>
           <button class="tg ${pad ? 'on' : ''}" data-a="pad"><span>X / O BUTTONS</span><i></i></button></div>
         <div class="st-sec"><h4>HELP</h4>
-          <button class="g-key" data-a="how">HOW TO PLAY</button>
+          <div class="cs-row"><button class="g-key" data-a="how">HOW TO PLAY</button><button class="g-key" data-a="lore">&#128214; READ THE BACKSTORY</button></div>
           <div class="cs-row"><button class="g-key dark" data-a="tc">CASINO TOUR</button><button class="g-key dark" data-a="th">CHURCH TOUR</button></div>
           <button class="g-key dark" data-a="skip">SKIP CURRENT TOUR</button></div>
         <div class="st-sec"><h4>ACCOUNT</h4>
@@ -1465,6 +1465,7 @@ export function openSettings(m: HTMLElement, close: () => void, act: SettingsAct
       if (a === 'sfx') { audio.setSfxMuted(!audio.sfxMuted); render(); if (!audio.sfxMuted) audio.play('hit', 0.4); }
       if (a === 'haptics') { set('cnc.haptics', get('cnc.haptics') === '0' ? '1' : '0'); render(); }
       if (a === 'pad') { const c = document.getElementById('controls')!; const on = c.classList.toggle('hidden') === false; set('cnc.pad', on ? '1' : '0'); render(); }
+      if (a === 'lore') { close(); showBackstory(); return; }
       if (a === 'how') { shell(root, close, 'plaza' as any, 'HOW TO PLAY', `<div class="st">${howToHtml()}<button class="g-key dark" id="bk" style="align-self:center;min-width:160px">BACK TO SETTINGS</button></div>`); playHowTo(root); $(root, '#bk').addEventListener('click', render); }
       if (a === 'tc') { close(); act.replay('casino'); } if (a === 'th') { close(); act.replay('church'); } if (a === 'skip') { close(); act.skip(); }
       if (a === 'key') {
