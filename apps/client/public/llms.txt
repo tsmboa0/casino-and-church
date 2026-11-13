@@ -15,7 +15,7 @@ Repository: https://github.com/tsmboa0/casino-and-church
 
 - Offline demo, no account, straight into the world: https://casino-and-church.vercel.app/?demo=1&agent=1
 - Open one place directly: add &play=<place>, e.g. https://casino-and-church.vercel.app/?demo=1&agent=1&play=market
-- Real on-chain game: https://casino-and-church.vercel.app/?agent=1 then CREATE ACCOUNT (username, password of 10+
+- Real on-chain game: https://casino-and-church.vercel.app/?agent=1 then SIGN UP (username, password of 10+
   characters, typed twice), pick a character. 30 welcome chips arrive on chain in a few seconds.
 
 URL parameters: agent=1 (no splash, no backstory, no tours, no music) · demo=1 (offline demo) · play=<place>.

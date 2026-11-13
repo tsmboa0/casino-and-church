@@ -141,7 +141,7 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
     if (linked && p) return `<button class="btn big pulse" id="cont"><span>CONTINUE</span><small>${p.username}</small></button><button class="btn ghost" id="switch">SWITCH ACCOUNT</button>`;
     // a guest wallet from before accounts existed: let its owner keep the chips by setting a password
     if (!linked && backend.hasDeviceWallet?.()) return `<button class="btn big pulse" id="secure"><span>SECURE MY ACCOUNT</span><small>${p ? p.username : 'keep your chips'}</small></button><button class="btn ghost" id="signin">SIGN IN</button>`;
-    return `<button class="btn big pulse" id="signin">SIGN IN</button><button class="btn ghost" id="create">CREATE ACCOUNT</button>`;
+    return `<button class="btn big pulse" id="signin">SIGN IN</button><button class="btn ghost" id="create">SIGN UP</button>`;
   };
 
   // ---------------------------------------------------------------- sign in (any device)
@@ -176,7 +176,8 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
     go.addEventListener('click', submit);
     [u, pw].forEach(i => i.addEventListener('keydown', (e) => { if (e.key === 'Enter') void submit(); }));
     root.querySelector('#back')!.addEventListener('click', title);
-    (draft.name ? pw : u).focus();
+    // desktop: straight into typing. Phones: show the whole form first; the keyboard comes up when the player taps a field
+    if (window.matchMedia('(pointer: fine)').matches) (draft.name ? pw : u).focus();
   };
 
   // ---------------------------------------------------------------- 1. name
@@ -360,7 +361,7 @@ export function openBook(root: HTMLElement, onDone: () => void, doneLabel = 'STA
     const fits = (el: HTMLElement) => el.scrollHeight <= el.clientHeight + 1;
     const wait = (ms: number) => new Promise<void>((r) => { timer = window.setTimeout(r, fast ? Math.min(ms, 6) : ms); });
     /** a human typist: uneven keys, a breath after commas, a pause after a sentence */
-    const keyDelay = (ch: string) => 0.84 * (ch === '.' || ch === ':' || ch === '—' ? 260 : ch === ',' ? 140 : ch === ' ' ? 45 + Math.random() * 50 : 28 + Math.random() * 42 + (Math.random() < 0.06 ? 120 : 0));
+    const keyDelay = (ch: string) => 0.72 * (ch === '.' || ch === ':' || ch === '—' ? 260 : ch === ',' ? 140 : ch === ' ' ? 45 + Math.random() * 50 : 28 + Math.random() * 42 + (Math.random() < 0.06 ? 120 : 0));
     /**
      * The page is full: go on to the right page, or turn the page. The turning leaf IS the right page (its writing on
      * the front); its back is the next blank left page. The old left page keeps its writing until the leaf lands on

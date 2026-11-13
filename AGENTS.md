@@ -17,7 +17,7 @@ on the live site and on a fresh clone.
 |---|---|
 | Try every panel offline (no account, nothing on chain) | `https://casino-and-church.vercel.app/?demo=1&agent=1` |
 | Jump straight to one game in the demo | `.../?demo=1&agent=1&play=roulette` |
-| Test the real on-chain game | `.../?agent=1`, then **CREATE ACCOUNT** (section 3) |
+| Test the real on-chain game | `.../?agent=1`, then **SIGN UP** (section 3) |
 | Open a place once signed in | add `&play=<place>` (section 2) |
 
 **URL parameters**
@@ -53,7 +53,7 @@ are in `#toasts[role=log]`.
 
 ## 3. A real account on testnet (live game)
 
-1. Open `https://casino-and-church.vercel.app/?agent=1` and click **CREATE ACCOUNT**.
+1. Open `https://casino-and-church.vercel.app/?agent=1` and click **SIGN UP**.
 2. Enter a username (3 to 16 letters or numbers; the hint confirms when it is free) and a password of at least 10
    characters, typed twice. Then click **NEXT**.
    - A NEAR wallet is created in the browser and sealed with the password. The server stores only a hash and the

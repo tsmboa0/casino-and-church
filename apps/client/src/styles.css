@@ -593,6 +593,6 @@ body:not(.playing) #labels { display: none; }
   background: #1c1626; color: var(--cream); box-shadow: 0 0 0 3px var(--ink), 0 0 0 5px var(--gold), 0 18px 40px rgba(0,0,0,.6); }
 #install-hint h3 { margin: 0 0 10px; font-family: var(--f-cap); font-weight: 700; font-size: 14px; letter-spacing: .14em; color: var(--gold2); }
 #install-hint p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
-#install-hint .ih-how { font-size: 13px; opacity: .9; }
+#install-hint .ih-how { font-size: 13px; opacity: .9; margin-bottom: 6px; }
 #install-hint .ih-ico { display: inline-block; padding: 0 5px; border: 1px solid rgba(255,255,255,.35); border-radius: 4px; font-weight: 700; }
 #install-hint .ih-row { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px; margin-top: 6px; }

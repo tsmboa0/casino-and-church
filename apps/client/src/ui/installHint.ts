@@ -8,7 +8,7 @@ let deferred: any = null;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault(); deferred = e;
   const ok = document.querySelector<HTMLElement>('#install-hint [data-k="ok"]');   // the hint is already up: offer the real button
-  if (ok && !isIOS()) { ok.dataset.k = 'install'; ok.textContent = 'ADD TO HOME SCREEN'; }
+  if (ok && !isIOS()) { ok.dataset.k = 'install'; ok.textContent = 'INSTALL'; }
 });
 
 const KEY = 'cnc.installHint';
@@ -23,17 +23,17 @@ export function maybeShowInstallHint() {
   el.id = 'install-hint';
   el.setAttribute('role', 'dialog');
   el.setAttribute('aria-label', 'Add the game to your home screen');
-  const how = isIOS()
-    ? 'Tap the <b>Share</b> button <span class="ih-ico">&#x2191;&#xFE0E;</span> in Safari, then <b>Add to Home Screen</b>.'
-    : 'Open your browser menu <span class="ih-ico">&#8942;</span> and choose <b>Add to Home screen</b> or <b>Install app</b>.';
+  const ios = isIOS();
+  const iphone = '<p class="ih-how"><b>iPhone:</b> tap <span class="ih-ico">&#x2191;&#xFE0E;</span> Share, then <b>Add to Home Screen</b>.</p>';
+  const android = '<p class="ih-how"><b>Android:</b> tap <span class="ih-ico">&#8942;</span> menu, then <b>Add to Home screen</b>.</p>';
   el.innerHTML = `
     <div class="ih-card">
-      <h3>BEST AS AN APP</h3>
-      <p>The Casino &amp; The Church plays best from your <b>home screen</b>: full screen, in landscape, with no browser bars.</p>
-      <p class="ih-how">${how}</p>
+      <h3>ADD TO HOME SCREEN</h3>
+      <p>Install the app or add it to your home screen for the best experience.</p>
+      ${ios ? iphone + android : android + iphone}
       <div class="ih-row">
         <button class="btn ghost" data-k="later">MAYBE LATER</button>
-        ${deferred && !isIOS() ? '<button class="btn" data-k="install">ADD TO HOME SCREEN</button>' : '<button class="btn" data-k="ok">GOT IT</button>'}
+        ${deferred && !ios ? '<button class="btn" data-k="install">INSTALL</button>' : '<button class="btn" data-k="ok">GOT IT</button>'}
       </div>
     </div>`;
   const done = () => { try { sessionStorage.setItem(KEY, '1'); } catch { /* ignore */ } el.remove(); };

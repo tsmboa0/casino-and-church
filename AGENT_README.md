@@ -97,7 +97,7 @@ cnc.state()           // chips, LUCK, FAITH, open panel
 
 **C. It is really on chain** (live game, about 5 minutes)
 
-1. Open `https://casino-and-church.vercel.app/?agent=1` → **CREATE ACCOUNT** → pick a character. Welcome chips arrive on chain.
+1. Open `https://casino-and-church.vercel.app/?agent=1` → **SIGN UP** → pick a character. Welcome chips arrive on chain.
 2. `cnc.go('coinflip')`, place a bet, and wait about 5 to 8 seconds. The result card has **VIEW ON EXPLORER**.
 3. `cnc.go('market')`: bet 1 chip UP or DOWN. About 2 minutes later the round settles from the OutLayer price.
 4. `cnc.go('board')` → **VERIFY A REAL DECISION**: the browser checks the model's signature and the on-chain anchor.
