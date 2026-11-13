@@ -14,6 +14,7 @@ import { WorldScene } from './world/WorldScene';
 import { mountControls, setControlsVisible } from './ui/controls';
 import { mountHud, mountFeedback, mountModal } from './ui/hud';
 import { startOnboarding, faceCss, setManifest, showSplash } from './ui/onboarding';
+import { maybeShowInstallHint } from './ui/installHint';
 import { setPlaces } from './ui/games';
 import { ATLAS_BASE, type Zone } from './config';
 
@@ -248,6 +249,7 @@ async function boot() {
   }
 
   // ---- the real flow: splash (first gesture -> music) -> title -> name -> character -> realm -> play
+  maybeShowInstallHint();                                            // phones in a browser tab: the home-screen app plays best
   await showSplash(() => {
     audio.unlock();
     audio.music('main');
