@@ -182,7 +182,7 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
     const pwHint = root.querySelector('#pw-hint') as HTMLElement | null;
     const proceed = async () => {
       if (next.disabled) return;
-      if (!accounts) return avatarStep();
+      if (!accounts) return storyStep();
       const bad = passwordProblem(pw1!.value) ?? (pw1!.value !== pw2!.value ? 'The two passwords do not match' : null);
       if (bad) { pwHint!.textContent = bad; pwHint!.className = 'hint bad'; return; }
       next.disabled = true; next.textContent = 'CREATING...';
@@ -193,7 +193,7 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
         // a guest who already has a character goes straight back in
         const p = store.profile;
         if (draft.securing && p) return finish({ ...p, username: draft.name });
-        avatarStep();
+        storyStep();
       } catch (e) {
         pwHint!.textContent = e instanceof Error ? e.message : 'Could not create the account.'; pwHint!.className = 'hint bad';
         next.disabled = false; next.textContent = 'NEXT';
@@ -203,6 +203,119 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
     root.querySelector('#dice')!.addEventListener('click', () => { inp.value = randomName(); check(); });
     root.querySelector('#back')!.addEventListener('click', title);
     next.addEventListener('click', () => void proceed());
+  };
+
+  // ---------------------------------------------------------------- the backstory: an open book, typed by hand
+  // paragraphs of lines (each line starts on its own row; a paragraph adds space before the next)
+  const STORY: string[][] = [
+    ['Most believe crypto is one thing. They are wrong.'],
+    ['It is two.'],
+    ['On one side lies The Casino — flashing lights, spinning wheels, memecoin madness. Fortunes made, fortunes lost. It is exhilarating, unpredictable, intoxicating.'],
+    ['On the other side stands The Church — a hall of sermons, prophecy, and belief. Here, the faithful argue over visions of tomorrow, promising freedom and salvation through code. It is solemn, righteous, inspiring.'],
+    ['But here is the truth:', 'The Casino funds the Church.', 'The Church built the Casino.', 'Neither can live without the other.'],
+    ['In this game, you are a wanderer between the two realms.'],
+    ['In the Casino, your LUCK will rise and fall as you play the casino games.', 'In the Church, your FAITH will grow through writing, quests, and prophecy.'],
+    ['But beware—if you spend too long in one realm, the other will fade.', 'Too much gambling, and your FAITH begins to crumble.', 'Too much preaching, and your LUCK runs dry.'],
+    ['Balance is survival.', 'LUCK fuels FAITH.', 'FAITH shapes LUCK.', 'Together, they decide your fate.'],
+    ['Welcome to The Casino and The Church.'],
+  ];
+  const storyStep = () => {
+    root.innerHTML = `
+    <div class="ob storybook">
+      <div class="book">
+        <div class="page left" id="pl"><div class="flow" id="fl"><h1 class="bk-h1">BACKSTORY</h1><div class="bk-orn"><i></i><span>&#10022;</span><i></i></div></div><span class="folio">i</span></div>
+        <div class="spine"></div>
+        <div class="page right" id="pr"><div class="flow" id="fr"></div><span class="folio">ii</span></div>
+      </div>
+      <div class="bk-bar"><button class="btn ghost" id="skip">SKIP</button><button class="btn big pulse" id="start" hidden>START</button></div>
+    </div>`;
+    const book = root.querySelector('.book') as HTMLElement;
+    const pages = [root.querySelector('#fl') as HTMLElement, root.querySelector('#fr') as HTMLElement];
+    const folios = [...root.querySelectorAll<HTMLElement>('.folio')];
+    let side = 0, spread = 1, fast = false, alive = true, timer = 0;
+    const caret = document.createElement('i'); caret.className = 'bk-caret';
+    const fits = (el: HTMLElement) => el.scrollHeight <= el.clientHeight + 1;
+    const wait = (ms: number) => new Promise<void>((r) => { timer = window.setTimeout(r, fast ? Math.min(ms, 6) : ms); });
+    /** a human typist: uneven keys, a breath after commas, a pause after a sentence */
+    const keyDelay = (ch: string) => 0.84 * (ch === '.' || ch === ':' || ch === '—' ? 260 : ch === ',' ? 140 : ch === ' ' ? 45 + Math.random() * 50 : 28 + Math.random() * 42 + (Math.random() < 0.06 ? 120 : 0));
+    /**
+     * The page is full: go on to the right page, or turn the page. The turning leaf IS the right page (its writing on
+     * the front); its back is the next blank left page. The old left page keeps its writing until the leaf lands on
+     * it, and the next blank right page lies underneath, so nothing ever just vanishes.
+     */
+    const nextPage = async () => {
+      if (side === 0) { side = 1; return; }
+      await wait(fast ? 120 : 650);
+      const pr = root.querySelector('#pr') as HTMLElement;
+      const leaf = document.createElement('div'); leaf.className = 'bk-leaf';
+      leaf.style.cssText = `left:${pr.offsetLeft}px;top:${pr.offsetTop}px;width:${pr.offsetWidth}px;height:${pr.offsetHeight}px`;
+      const front = pr.cloneNode(true) as HTMLElement; front.removeAttribute('id'); front.className = 'page right bk-face front';
+      front.querySelectorAll('[id]').forEach(e => e.removeAttribute('id')); front.querySelector('.bk-caret')?.remove();
+      const back = document.createElement('div'); back.className = 'page left bk-face back';
+      back.innerHTML = `<div class="flow"></div><span class="folio">${toRoman(spread * 2 + 1)}</span>`;
+      leaf.append(front, back);
+      book.append(leaf);
+      // under the leaf: the next blank right page (hidden by the leaf until it lifts), in the leaf's shadow
+      pages[1].innerHTML = ''; folios[1].textContent = toRoman(spread * 2 + 2);
+      const shade = document.createElement('div'); shade.className = 'bk-shade'; pr.append(shade);
+      const ms = fast ? 420 : 1100;
+      leaf.style.setProperty('--turn', `${ms}ms`); shade.style.animationDuration = `${ms}ms`;
+      await new Promise<void>((r) => { timer = window.setTimeout(r, ms); });
+      // the leaf has landed on the left: it becomes the new left page
+      pages[0].innerHTML = ''; folios[0].textContent = toRoman(spread * 2 + 1);
+      leaf.remove(); shade.remove();
+      spread++; side = 0;
+    };
+    const toRoman = (n: number) => ['', 'i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x', 'xi', 'xii'][n] ?? String(n);
+    /** a new line block on the current page; if even an empty one does not fit, move on first */
+    const newLine = async (cls: string) => {
+      for (let tries = 0; tries < 3; tries++) {
+        const p = document.createElement('p'); p.className = cls; p.append(caret);
+        pages[side].append(p);
+        p.insertBefore(document.createTextNode('M'), caret);              // room for at least one line of text?
+        const ok = fits(pages[side]); p.firstChild!.remove();
+        if (ok) return p;
+        p.remove(); await nextPage();
+      }
+      throw new Error('page too small');
+    };
+    const typeLine = async (text: string, cls: string) => {
+      let p = await newLine(cls);
+      const words = text.split(' ');
+      for (let w = 0; w < words.length; w++) {
+        if (!alive) return;
+        const word = (w ? ' ' : '') + words[w];
+        // will the whole word fit here? if not, it goes on the next page (the line continues there)
+        const probe = document.createTextNode(word); p.insertBefore(probe, caret);
+        const ok = fits(pages[side]); probe.remove();
+        if (!ok) { await nextPage(); p = await newLine(`${cls} cont`); }
+        const t = document.createTextNode(''); p.insertBefore(t, caret);
+        for (const ch of (p.textContent === '' && word.startsWith(' ') ? word.slice(1) : word)) {
+          if (!alive) return;
+          t.data += ch; await wait(keyDelay(ch));
+        }
+      }
+    };
+    const run = async () => {
+      await wait(500);
+      for (let i = 0; i < STORY.length && alive; i++) {
+        const last = i === STORY.length - 1;
+        for (let j = 0; j < STORY[i].length && alive; j++) {
+          await typeLine(STORY[i][j], `${j === 0 ? 'para' : 'line'}${last ? ' welcome' : ''}`);
+        }
+        await wait(fast ? 0 : 320);
+      }
+      if (!alive) return;
+      (root.querySelector('#skip') as HTMLElement).hidden = true;
+      (root.querySelector('#start') as HTMLElement).hidden = false;
+    };
+    const leave = () => { alive = false; window.clearTimeout(timer); window.removeEventListener('keydown', onKey); avatarStep(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!(root.querySelector('#start') as HTMLElement).hidden) leave(); else fast = true; } };
+    window.addEventListener('keydown', onKey);
+    book.addEventListener('click', () => { fast = true; });                 // tap the book: the typist hurries
+    root.querySelector('#skip')!.addEventListener('click', leave);
+    root.querySelector('#start')!.addEventListener('click', leave);
+    void run().catch(() => { /* a page too small to type on: let them go on */ (root.querySelector('#start') as HTMLElement).hidden = false; });
   };
 
   // ---------------------------------------------------------------- 2. avatar
@@ -220,7 +333,7 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
           <b id="av-name"></b><small id="av-blurb"></small>
         </div>
       </div>
-      <div class="row">${draft.created || draft.signedIn ? '' : '<button class="btn ghost" id="back">BACK</button>'}<button class="btn big" id="next">NEXT</button></div>
+      <div class="row">${draft.created || draft.signedIn ? '' : '<button class="btn ghost" id="back">BACK</button>'}<button class="btn ghost" id="lore">&#128214; BACKSTORY</button><button class="btn big" id="next">NEXT</button></div>
     </div>`;
     const upd = () => {
       const a = AVATARS.find(x => x.id === draft.avatar)!;
@@ -231,6 +344,7 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
     root.querySelectorAll<HTMLElement>('.av').forEach(b => b.addEventListener('click', () => { draft.avatar = b.dataset.id!; upd(); }));
     upd();
     root.querySelector('#back')?.addEventListener('click', nameStep);
+    root.querySelector('#lore')!.addEventListener('click', () => storyStep());   // the book again; START comes back here
     root.querySelector('#next')!.addEventListener('click', howStep);
   };
 
