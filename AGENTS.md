@@ -7,6 +7,7 @@ on the live site and on a fresh clone.
 - **Contract:** `realm.casinonchurch.testnet` ([explorer](https://testnet.nearblocks.io/address/realm.casinonchurch.testnet))
 - **API server:** https://server-production-d070a910.up.railway.app (`/healthz` reports dealer, relayer, AI hosts and the BTC market keeper)
 - **Machine-readable summary:** https://casino-and-church.vercel.app/llms.txt
+- **Overview for judges** (what was built, and where each claim lives in code): [`AGENT_README.md`](AGENT_README.md)
 
 ---
 

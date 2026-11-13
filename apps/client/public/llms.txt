@@ -8,7 +8,8 @@
 Live game: https://casino-and-church.vercel.app
 Contract: realm.casinonchurch.testnet (NEAR testnet)
 API health: https://server-production-d070a910.up.railway.app/healthz
-Full testing guide: AGENTS.md in the repository root
+Start here: AGENT_README.md (what was built, claim-to-code map), then AGENTS.md (step-by-step testing guide)
+Repository: https://github.com/tsmboa0/casino-and-church
 
 ## Quick start for agents
 
