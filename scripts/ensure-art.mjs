@@ -37,8 +37,9 @@ const shade = (c, k) => [Math.min(255, Math.round(c[0] * k)), Math.min(255, Math
 // ---------------------------------------------------------------- colours by family (casino reds/golds, church stone/wood)
 function palette(name) {
   const v = hash(name) % 5;
-  if (name.startsWith('cf/')) return { fill: [[122, 26, 52], [138, 30, 60], [110, 22, 48], [150, 120, 60], [96, 70, 50]][v], tile: true };
-  if (name.startsWith('mf/')) return { fill: [[150, 136, 112], [160, 146, 120], [138, 124, 100], [120, 90, 60], [96, 120, 70]][v], tile: true };
+  // floors: one tone per realm (casino carpet, church stone), each tile variant a shade lighter or darker
+  if (name.startsWith('cf/')) return { fill: shade([120, 28, 54], 0.9 + v * 0.04), tile: true };
+  if (name.startsWith('mf/')) return { fill: shade([140, 128, 106], 0.92 + v * 0.035), tile: true };
   if (name.startsWith('cw/')) return { fill: [80, 30, 70], wall: true };
   if (name.startsWith('mw/')) return { fill: [120, 106, 86], wall: true };
   if (name.startsWith('j/')) return { fill: [24, 110, 70] };                       // tables, slots
