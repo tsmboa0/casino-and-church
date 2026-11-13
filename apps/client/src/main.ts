@@ -164,6 +164,13 @@ async function boot() {
   if (offline) bus.emit('toast', offline);
 
   const manifest = await (await fetch(`${ATLAS_BASE}manifest.json`)).json();
+  // a fresh clone draws placeholder art (scripts/ensure-art.mjs): say so, and where the real thing is
+  if (manifest.placeholder) {
+    const b = document.createElement('a');
+    b.id = 'art-note'; b.href = 'https://casino-and-church.vercel.app'; b.target = '_blank'; b.rel = 'noopener';
+    b.textContent = 'Placeholder art: the licensed art is not in the repository. Everything works; the real look is at casino-and-church.vercel.app';
+    document.body.append(b);
+  }
   // hand over from the inline loading screen (index.html) to the game's own screens
   const dropBootSplash = () => { const b = document.getElementById('boot-splash'); if (!b) return; b.style.opacity = '0'; setTimeout(() => b.remove(), 400); };
   setManifest(manifest);
