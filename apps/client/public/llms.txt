@@ -1,0 +1,45 @@
+# The Casino & The Church
+
+> A pixel RPG on NEAR testnet. Crypto's two cultures are two realms: the Casino (LUCK, on-chain games) and the
+> Church (FAITH, tithes, quests). Staying in one drains the other, so balance is survival. Every chip and bet lives in
+> one NEAR contract; two AI hosts on NEAR AI Cloud run the house with signed decisions; a BTC UP/DOWN market is priced
+> by an OutLayer TEE oracle. Play money only.
+
+Live game: https://casino-and-church.vercel.app
+Contract: realm.casinonchurch.testnet (NEAR testnet)
+API health: https://server-production-d070a910.up.railway.app/healthz
+Full testing guide: AGENTS.md in the repository root
+
+## Quick start for agents
+
+- Offline demo, no account, straight into the world: https://casino-and-church.vercel.app/?demo=1&agent=1
+- Open one place directly: add &play=<place>, e.g. https://casino-and-church.vercel.app/?demo=1&agent=1&play=market
+- Real on-chain game: https://casino-and-church.vercel.app/?agent=1 then CREATE ACCOUNT (username, password of 10+
+  characters, typed twice), pick a character. 30 welcome chips arrive on chain in a few seconds.
+
+URL parameters: agent=1 (no splash, no backstory, no tours, no music) · demo=1 (offline demo) · play=<place>.
+
+## Moving without the canvas
+
+Every panel is HTML. Use the Places button (map icon, #btn-places) or the page API:
+
+- cnc.state(): mode, signedIn, profile, realm, chips, luck, faith, panelOpen, panelTitle
+- cnc.places(): every location as {id, kind, label, realm}
+- cnc.go('<place>'): go there and open it
+- cnc.close(): close the open panel (Escape does too)
+
+Places: cashier, slots-west, slots-east, wheel, market (BTC), blackjack, roulette, coinflip, dice, plot-1..3, monitor,
+npc-owner (Don Fortuna), harmony, board, altar, missions, candles, offering, confessional, ledger, commission,
+npc-priest (Father Nakamoto). Aliases: btc, don, priest, desk, quests.
+
+Panels: #modal .gm[role=dialog], title in .gm-title span. Results: #res[role=status], with an explorer link on the
+live game. Toasts: #toasts[role=log].
+
+## Facts worth knowing
+
+- 1 chip = 0.01 NEAR. Casino bets are 10 chips. Cashier: GET FREE TEST NEAR, then BUY CHIPS.
+- Bets are gasless meta-transactions (NEP-366). Games are commit-reveal: the dealer commits before you bet.
+- BTC Exchange: 1-minute rounds, 1.9x on the right call, a tie refunds; prices from the OutLayer TEE oracle.
+- AI hosts decide every 10 minutes; each decision is signed and its hash anchored on chain (verify on the board).
+- Accounts: the password never leaves the browser; the server keeps only a hash and a sealed wallet copy.
+- Run locally: pnpm install && pnpm dev (offline demo with placeholder art); pnpm test runs every test suite.

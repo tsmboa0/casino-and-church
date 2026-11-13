@@ -14,6 +14,7 @@ import { WorldScene } from './world/WorldScene';
 import { mountControls, setControlsVisible } from './ui/controls';
 import { mountHud, mountFeedback, mountModal } from './ui/hud';
 import { startOnboarding, faceCss, setManifest, showSplash } from './ui/onboarding';
+import { setPlaces } from './ui/games';
 import { ATLAS_BASE, type Zone } from './config';
 
 /** Render at the device's real pixel resolution (crisp), capped so very large screens stay fast. */
@@ -179,6 +180,25 @@ async function boot() {
     const t = setInterval(() => { const s = game.scene.getScene('World') as WorldScene; if (s?.world && s.scene.isActive()) { clearInterval(t); res(s); } }, 50);
   });
   mountModal({ replay: (r) => world.replayTour(r), reset: () => { clearProfile(); location.reload(); } });
+  setPlaces(world.placeList());
+  // the canvas is a picture to assistive tech and browser agents: say how to move without it
+  document.getElementById('game')?.setAttribute('aria-label', 'The game world. Use the Places button (map pin, top right) to go to any location.');
+  /**
+   * window.cnc: a small API for automated testers and browser agents (documented in AGENTS.md / llms.txt).
+   * Everything it does, a player can do by hand.
+   */
+  (window as any).cnc = {
+    version: 1,
+    state: () => ({
+      mode: backend.mode, signedIn: !!store.profile, profile: store.profile, realm: store.realm,
+      chips: store.eco.chips, luck: Math.round(store.eco.luck * 10) / 10, faith: Math.round(store.eco.faith * 10) / 10, testNear: store.eco.near,
+      panelOpen: document.getElementById('modal')?.classList.contains('open') ?? false,
+      panelTitle: document.querySelector('#modal .gm-title span')?.textContent ?? null,
+    }),
+    places: () => world.placeList(),
+    go: (place: string) => world.travelTo(place),
+    close: () => (document.querySelector('#modal [data-close]') as HTMLElement | null)?.click(),
+  };
   bus.on('modalOpened', () => { world.setPlayerLocked(true); input.clearEdges(); });
   bus.on('modalClosed', () => { world.setPlayerLocked(false); });
   bus.on('skipTour', () => world.skipTour());
@@ -201,7 +221,11 @@ async function boot() {
     document.body.classList.add('playing');
     audio.music('main');                                         // main theme at the crossroads
     world.beginPlay(p);
+    // ?play=roulette (or market, cashier, altar, commission, don, ...): go straight there once in the world
+    const target = q.get('play');
+    if (target) setTimeout(() => { if (!world.travelTo(target)) bus.emit('toast', `No place called "${target}". Open Places to see them all.`); }, 1200);
   };
+  const agent = q.get('agent') === '1';
 
   // ---- dev/screenshot hooks
   dropBootSplash();
@@ -211,6 +235,17 @@ async function boot() {
     return;
   }
   if (q.get('at')) { const [x, y] = q.get('at')!.split(',').map(Number); world.debugAt(x, y); return; }
+
+  // ---- ?agent=1: no tap-to-start, no backstory, no tours, no music (a browser agent can drive it from here)
+  if (agent) {
+    if (backend.mode === 'mock') {                                  // the demo needs no account: straight in
+      const p = store.profile ?? { username: 'Agent', avatar: 'c_tourist', startRealm: 'plaza' as any, toursDone: { casino: true, church: true } };
+      play({ ...p, toursDone: { casino: true, church: true } });
+      return;
+    }
+    startOnboarding(manifest, (p: any) => play({ ...p, toursDone: { casino: true, church: true } }), { agent: true });
+    return;
+  }
 
   // ---- the real flow: splash (first gesture -> music) -> title -> name -> character -> realm -> play
   await showSplash(() => {

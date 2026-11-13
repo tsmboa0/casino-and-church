@@ -22,7 +22,8 @@ export function mountHud(avatarSheet: (id: string) => string) {
       <div class="b-c"><div class="realm" id="realm-badge"><i></i><span>CASINO</span></div></div>
       <div class="b-r">
         <div class="evpills" id="evpills"></div>
-        <div class="chips">${icon('coin', 14)}<b id="val-chips">0</b></div>
+        <div class="chips" id="hud-chips" role="status" aria-label="Chips">${icon('coin', 14)}<b id="val-chips">0</b></div>
+        <button class="sysbtn" id="btn-places" aria-label="Places: go to any location" title="Places">${icon('map', 14)}</button>
         <button class="sysbtn" id="btn-sound" aria-label="Music" title="Music on/off (game sounds stay on)"></button>
         <button class="sysbtn" id="btn-menu" aria-label="Menu">${icon('gear', 14)}</button>
       </div>
@@ -30,6 +31,7 @@ export function mountHud(avatarSheet: (id: string) => string) {
   const refresh = () => {
     const p = store.profile; if (p) { el('hud-name').textContent = p.username; el('hud-face').style.cssText = avatarSheet(p.avatar); }
     el('val-chips').textContent = store.eco.chips.toLocaleString();
+    el('hud-chips').setAttribute('aria-label', `Chips ${store.eco.chips}, LUCK ${Math.floor(store.eco.luck)}, FAITH ${Math.floor(store.eco.faith)}`);
     const rb = el('realm-badge'); rb.className = `realm ${store.realm}`; rb.querySelector('span')!.textContent = store.realm === 'casino' ? 'THE CASINO' : store.realm === 'church' ? 'THE CHURCH' : 'THE CROSSROADS';
   };
   const paintSound = () => { el('btn-sound').innerHTML = icon(audio.muted ? 'mute' : 'sound', 14); };
@@ -37,6 +39,7 @@ export function mountHud(avatarSheet: (id: string) => string) {
   bus.on('soundChanged', paintSound);
   store.on(refresh); refresh(); paintSound();
   el('btn-menu').addEventListener('click', () => bus.emit('menu'));
+  el('btn-places').addEventListener('click', () => bus.emit('panel', 'places', 'Places', 'places'));
   el('btn-exit').addEventListener('click', () => bus.emit('exit'));
   // live realm events (Happy Hour / Vigil): a pill per event with a countdown; tap it to open the Crossroads board
   const pills = el('evpills');
@@ -60,6 +63,7 @@ export function mountHud(avatarSheet: (id: string) => string) {
 // ------------------------------------------------------------------ toasts & realm banner
 export function mountFeedback() {
   const toasts = el('toasts'), banner = el('banner');
+  toasts.setAttribute('aria-live', 'polite'); toasts.setAttribute('role', 'log');
   bus.on('toast', (msg: string) => {
     const t = document.createElement('div'); t.className = 'toast px'; t.textContent = msg; toasts.appendChild(t);
     setTimeout(() => t.classList.add('out'), 2600); setTimeout(() => t.remove(), 3100);
@@ -92,6 +96,7 @@ const PANEL_COPY: Record<PanelKind, { t: string; body: string; tag: string }> = 
   blackjack: { t: 'Blackjack', tag: 'OUT OF ORDER', body: 'The dealer is on a break. Blackjack opens in a later update.' },
   candles: { t: 'Votive Candles', tag: 'PHASE 3', body: 'Light a candle once a day. Time it right for a deeper FAITH.' },
   confessional: { t: 'Confessional', tag: 'LIVE', body: '' },
+  places: { t: 'Places', tag: 'LIVE', body: 'Go to any location.' },
   market: { t: 'BTC Exchange', tag: 'LIVE', body: 'Call BTC up or down for the next minute.' },
   commission: { t: 'Commission Desk', tag: 'LIVE', body: 'Commission a mission for the Quest Board.' },
 };
@@ -99,6 +104,8 @@ const PANEL_COPY: Record<PanelKind, { t: string; body: string; tag: string }> = 
 export function mountModal(actions: { replay: (r: Realm) => void; reset: () => void }) {
   const m = el('modal');
   const close = () => { m.className = ''; m.innerHTML = ''; audio.release(); bus.emit('modalClosed'); };
+  // Escape closes whatever panel is open
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && m.classList.contains('open')) { e.preventDefault(); close(); } });
   const open = (html: string) => {
     m.className = 'open'; m.innerHTML = `<div class="sheet px">${html}</div>`;
     m.querySelector('[data-close]')?.addEventListener('click', close);

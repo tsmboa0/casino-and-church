@@ -7,6 +7,9 @@
     "dev": "pnpm --filter client dev",
     "build": "pnpm --filter client build",
     "server": "pnpm --filter server dev",
-    "test:backend": "pnpm --filter @cnc/shared test && pnpm --filter server test && pnpm --filter @cnc/sim vectors && pnpm --filter @cnc/sim sim"
+    "test:backend": "pnpm --filter @cnc/shared test && pnpm --filter server test && pnpm --filter @cnc/sim vectors && pnpm --filter @cnc/sim sim",
+    "test": "pnpm test:backend && pnpm test:contract && pnpm typecheck",
+    "test:contract": "cd contracts/realm && cargo test",
+    "typecheck": "pnpm --filter client exec tsc --noEmit -p . && pnpm --filter server exec tsc --noEmit -p ."
   }
 }

@@ -492,6 +492,8 @@ export let backend: Backend = new MockBackend();
 export async function initBackend(): Promise<string | null> {
   const env = import.meta.env as unknown as Record<string, string | undefined>;
   if ((env.VITE_BACKEND ?? 'mock') !== 'chain') return null;
+  // ?demo=1: the offline demo on any build (no account, nothing on chain): the quickest way to try every panel
+  if (new URLSearchParams(location.search).get('demo') === '1') return null;
   const { connectChain } = await import('../chain/boot');
   const next = await connectChain(env.VITE_API_URL ?? 'http://localhost:8787');
   if ('offline' in next) return next.offline;

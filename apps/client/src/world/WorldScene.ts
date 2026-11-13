@@ -86,6 +86,7 @@ export class WorldScene extends Phaser.Scene {
     this.spawnNpcs();
     this.spawnLighting();
     this.promptEl = overlay.make('prompt');
+    this.promptEl.setAttribute('role', 'button');
     this.promptEl.style.display = 'none';
     this.promptEl.style.pointerEvents = 'auto';
     this.promptEl.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); if (this.current && !this.touring && this.playing) this.interact(this.current); });
@@ -99,6 +100,7 @@ export class WorldScene extends Phaser.Scene {
     this.syncPlots();
     this.watchBtc();
     bus.on('worldTap', (cx: number, cy: number) => this.onTap(cx, cy));
+    bus.on('travel', (id: string) => { this.travelTo(id); });
     this.bubble = new Bubble(this);
     this.hint = new Bubble(this);
     this.marker = new Marker();
@@ -681,6 +683,38 @@ export class WorldScene extends Phaser.Scene {
     const want = (this.player ? inside(this.player.x, this.player.y) : false) || [...this.npcs.values()].some(n => inside(n.x, n.y));
     if (want && !d.open) { d.open = true; d.s.play(`anim:${d.key}_open`); }
     else if (!want && d.open) { d.open = false; d.s.play(`anim:${d.key}_close`); }
+  }
+
+  /**
+   * Fast travel (the Places menu, ?play=..., window.cnc.go): stand at a place and open it. Accepts an interactable id
+   * (roulette, market, cashier, offering, commission, npc-owner, ...), a kind, or a friendly alias (btc, don, priest).
+   */
+  travelTo(key: string): boolean {
+    const alias: Record<string, string> = {
+      don: 'npc-owner', fortuna: 'npc-owner', owner: 'npc-owner', priest: 'npc-priest', nakamoto: 'npc-priest', father: 'npc-priest',
+      slots: 'slots-west', btc: 'market', exchange: 'market', quests: 'missions', questboard: 'missions', 'quest-board': 'missions',
+      desk: 'commission', plot: 'plot-1', house: 'monitor', words: 'board',
+    };
+    const k = alias[key.toLowerCase()] ?? key.toLowerCase();
+    const it = this.world.interactables.find(i => i.id === k) ?? this.world.interactables.find(i => i.kind === k);
+    const p = this.player;
+    if (!it || !p || !this.playing) return false;
+    if (this.touring) this.skipTour();
+    // jumping in is a deliberate choice: no guided tour pops up over the panel
+    const zone: Zone = it.rect.x < CASINO_WALL_X ? 'casino' : it.rect.x >= CHURCH_WALL_X ? 'church' : 'plaza';
+    if (zone !== 'plaza') this.pending[zone] = false;
+    p.goTo([]);                                                  // drop any walk in progress
+    p.x = it.rect.x + it.rect.w / 2; p.y = it.rect.y + it.rect.h / 2;
+    this.time.delayedCall(350, () => { if (this.playing) this.interact(it); });
+    return true;
+  }
+  /** every place, for the Places menu and the agent API */
+  placeList() {
+    return this.world.interactables.filter(i => !i.id.endsWith('-r')).map(i => ({
+      id: i.id, kind: i.kind, label: i.kind === 'npc' ? (i.npc === 'owner' ? 'Talk to Don Fortuna' : 'Talk to Father Nakamoto')
+        : i.id === 'slots-west' ? 'Slots (west)' : i.id === 'slots-east' ? 'Slots (east)' : i.label,
+      realm: (i.rect.x < CASINO_WALL_X ? 'casino' : i.rect.x >= CHURCH_WALL_X ? 'church' : 'plaza') as 'casino' | 'plaza' | 'church',
+    }));
   }
 
   /** debug: park the camera somewhere for screenshots */

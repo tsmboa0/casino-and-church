@@ -32,7 +32,7 @@ const NAMES_B = ['Fox', 'Saint', 'Dealer', 'Pilgrim', 'Magpie', 'Gambler', 'Card
 const rnd = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
 const randomName = () => `${rnd(NAMES_A)}${rnd(NAMES_B)}${Math.floor(Math.random() * 90 + 10)}`.slice(0, NAME_MAX);
 
-export async function startOnboarding(manifest: any, onDone: (p: Profile) => void) {
+export async function startOnboarding(manifest: any, onDone: (p: Profile) => void, opts: { agent?: boolean } = {}) {
   MANIFEST = manifest;
   const root = document.getElementById('onboarding')!;
   root.className = 'show';
@@ -255,7 +255,7 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
   };
 
   // ---------------------------------------------------------------- the backstory (new players, before the character)
-  const storyStep = () => openBook(root, avatarStep);
+  const storyStep = () => (opts.agent ? avatarStep() : openBook(root, avatarStep));      // ?agent=1: straight to the character
 
   // ---------------------------------------------------------------- 2. avatar
   const avatarStep = () => {
@@ -284,7 +284,9 @@ export async function startOnboarding(manifest: any, onDone: (p: Profile) => voi
     upd();
     root.querySelector('#back')?.addEventListener('click', nameStep);
     root.querySelector('#lore')!.addEventListener('click', () => storyStep());   // the book again; START comes back here
-    root.querySelector('#next')!.addEventListener('click', howStep);
+    root.querySelector('#next')!.addEventListener('click', () => (opts.agent
+      ? finish({ username: draft.name, avatar: draft.avatar, startRealm: 'plaza' as any, toursDone: { casino: true, church: true } })
+      : howStep()));
   };
 
   // ---------------------------------------------------------------- 3. how to play

@@ -705,3 +705,8 @@
 .cm-who p { font-size: 11px; }
 .cm .camp-form { gap: 6px; }
 .cm .camp-form .cf-row input[type=number] { width: 64px; flex: 0 0 64px; }
+
+/* Places (fast travel) */
+.pl-wrap { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; max-height: calc(var(--vvh, 100vh) - 110px); }
+.pl-group .pl-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.pl-group .g-key { flex: 0 1 auto; }

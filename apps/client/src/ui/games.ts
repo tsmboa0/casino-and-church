@@ -96,13 +96,13 @@ const SYM: Record<string, string> = { seven: '<span class="s7">7</span>', diamon
 
 // ---------------------------------------------------------------------------------------------- shell + shared parts
 function shell(root: Root, close: () => void, theme: 'casino' | 'church', title: string, body: string, tier = false) {
-  root.innerHTML = `<div class="gm ${theme}">
+  root.innerHTML = `<div class="gm ${theme}" role="dialog" aria-modal="true" aria-label="${title.replace(/<[^>]+>/g, '').replace(/"/g, '')}">
     <div class="gm-top"><div class="gm-title"><i class="bulbs"></i><span>${title}</span><i class="bulbs"></i></div>
       ${tier ? '<div class="gm-tier" id="tier"></div>' : ''}
       <div class="g-lcd"><small>CREDITS</small><b id="bal">${fmt(store.eco.chips)}</b></div>
       <button class="gm-x" data-close aria-label="Close">${X_SVG}</button></div>
     <div class="gm-body">${body}</div>
-    <div class="gm-res" id="res" hidden></div></div>`;
+    <div class="gm-res" id="res" role="status" aria-live="assertive" hidden></div></div>`;
   $(root, '[data-close]').addEventListener('click', close);
   refreshTier(root);
 }
@@ -1012,6 +1012,24 @@ function board(root: Root, close: () => void) {
   void render();
 }
 
+// ---------------------------------------------------------------------------------------------- PLACES (fast travel)
+/** every location in the world, set by main.ts once the world is built */
+export interface PlaceRow { id: string; kind: string; label: string; realm: 'casino' | 'plaza' | 'church' }
+let PLACES: PlaceRow[] = [];
+export function setPlaces(rows: PlaceRow[]) { PLACES = rows; }
+function places(root: Root, close: () => void) {
+  const group = (realm: PlaceRow['realm'], title: string) => {
+    const rows = PLACES.filter(p => p.realm === realm);
+    return `<div class="pl-group"><div class="g-lab">${title}</div><div class="pl-list">${rows.map(p => `<button class="g-key dark" data-place="${p.id}" aria-label="Go to ${esc(p.label)}">${esc(p.label)}</button>`).join('')}</div></div>`;
+  };
+  shell(root, close, 'plaza' as any, 'PLACES', `
+    <div class="pl-wrap">
+      <p class="g-msg">Walk anywhere, or jump straight to a place: it opens as soon as you arrive.</p>
+      ${group('casino', 'THE CASINO')}${group('plaza', 'THE CROSSROADS')}${group('church', 'THE CHURCH')}
+    </div>`);
+  $$(root, '[data-place]').forEach(b => b.addEventListener('click', () => { const id = b.dataset.place!; close(); bus.emit('travel', id); }));
+}
+
 // ---------------------------------------------------------------------------------------------- THE COMMISSION DESK
 /** my account as plots record it (chain: the account id; demo: the player name) */
 async function myOwnerId(): Promise<string> {
@@ -1493,7 +1511,7 @@ export function openSettings(m: HTMLElement, close: () => void, act: SettingsAct
 
 // ---------------------------------------------------------------------------------------------- registry
 const GAMES: Partial<Record<PanelKind, (root: Root, close: () => void, id?: string) => void>> = {
-  monitor, ledger, board, market, commission,
+  monitor, ledger, board, market, commission, places,
   chat: (root, close, id) => hostChat(root, close, id === 'nakamoto' ? 'nakamoto' : 'fortuna'),
   slots, coinflip, dice, roulette, blackjack, cashier, offering, candles, missions, altar, confessional, wheel: fortune,
   harmony: (root, close) => harmony(root, close),

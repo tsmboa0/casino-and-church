@@ -15,6 +15,7 @@ const ICONS: Record<string, string[]> = {
   heart: ['........', '.oo..oo.', 'orRoorRo', 'orRRRrRo', '.orRRrro', '..orrro.', '...oro..', '....o...'],
   sound: ['...w....', '..ww..s.', 'wwww...s', 'wwww.s.s', 'wwww.s.s', 'wwww...s', '..ww..s.', '...w....'],
   mute: ['...w....', '..ww.r.r', 'wwww..r.', 'wwww.r.r', 'wwww.r.r', 'wwww..r.', '..ww.r.r', '...w....'],
+  map: ['oooooooo', 'owsswwso', 'owssrwso', 'owsrwrso', 'owssrwso', 'owsswwso', 'oooooooo', '........'],   // a folded map, X marks the spot
   skip: ['........', 'o..o....', 'oo.oo...', 'ooooo...', 'oo.oo...', 'o..o....', '........', '........'],
 };
 export function icon(name: string, size = 16, cls = ''): string {
