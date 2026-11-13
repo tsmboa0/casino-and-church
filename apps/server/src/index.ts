@@ -101,7 +101,8 @@ const app = buildApp({
   agents,
   activity,
   rpcCall: (method, params) => rpc.call(method, params),
-  rpcEndpoint: () => rpc.endpoint.replace(/(api[_-]?key|token)=[^&]+/gi, '$1=***'),
+  // the provider only (e.g. quiknode.pro): RPC URLs carry their API key in the path or the query
+  rpcEndpoint: () => { try { return new URL(rpc.endpoint).hostname.split('.').slice(-2).join('.'); } catch { return 'hidden'; } },
   height: async () => (await rpc.recentTip()).height,   // a 15 s-old tip is fine for the expiry window check
   broadcast: (signed) => {
     if (!relayer) return Promise.reject(new Error('relayer keys are not configured'));
