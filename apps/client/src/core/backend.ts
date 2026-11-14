@@ -173,7 +173,7 @@ class MockBackend implements Backend {
   async placeBet(r: BetReq): Promise<BetResult> {
     this.settle();
     const e = store.eco, s = store.stats;
-    if (r.game === 'blackjack') fail('bad_args', 'The blackjack table is closed in the demo.');
+    if (r.game === 'blackjack') fail('not_allowed', 'The blackjack table is closed in the demo.');
     if (!PARAMS.quoteBets.includes(r.wager) && r.game !== 'roulette') fail('bad_wager', 'Pick one of the listed bets.');
     if (r.wager < 1 || e.chips < r.wager) fail('no_chips', 'Not enough chips. Visit the Cashier.');
     const draws = randomDraws(), betId = s.nextBet++;
@@ -290,7 +290,7 @@ class MockBackend implements Backend {
     const h = this.bj; if (!h || h.id !== betId) return fail('unknown_bet', 'That hand is over.');
     await sleep(250);
     if (action === 'double') {
-      if (h.player.length !== 2 || h.doubled) fail('bad_args', 'You can only double on your first two cards.');
+      if (h.player.length !== 2 || h.doubled) fail('not_allowed', 'You can only double on your first two cards.');
       if (store.eco.chips < h.original) fail('no_chips', 'Not enough chips to double.');
       store.change({ chips: -h.original }); h.stake += h.original; h.doubled = true; h.player.push(h.deck.pop()!);
       return this.bjFinish(handTotal(h.player).total <= 21);
@@ -454,7 +454,7 @@ class MockBackend implements Backend {
   }
   async createCampaign(n: NewCampaign) {
     await sleep(700);
-    const problem = campaignProblem(n); if (problem) fail('bad_args', problem);
+    const problem = campaignProblem(n); if (problem) fail('bad_campaign', problem);
     if (store.eco.faith < CAMPAIGN_LIMITS.creatorMinFaith) fail('faith_low', `You need FAITH ${CAMPAIGN_LIMITS.creatorMinFaith} to open a campaign.`);
     const cost = campaignCost(n);
     if (store.eco.chips < cost.total) fail('no_chips', `This campaign costs ${cost.total} chips.`);

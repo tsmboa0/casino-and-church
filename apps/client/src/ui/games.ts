@@ -150,7 +150,13 @@ function showResult(root: Root, kind: 'win' | 'lose' | 'push' | 'jackpot', title
   window.clearTimeout(Number(r.dataset.t)); r.dataset.t = String(window.setTimeout(hide, kind === 'lose' ? 3200 : kind === 'jackpot' ? 6000 : kind === 'push' ? 3900 : 4300));
 }
 const hideResult = (root: Root) => { const r = root.querySelector('#res') as HTMLElement | null; if (r) { r.hidden = true; r.innerHTML = ''; } };
-const oops = (root: Root, e: unknown) => showResult(root, 'push', 'HOLD ON', '', errText(e));
+/** errors where simply trying again can work (a dropped or refused transaction, a busy relayer); not "no chips" or "LUCK too low" */
+const RETRYABLE = new Set(['bad_args', 'rate_limited', 'quota', 'vault_low']);
+const oops = (root: Root, e: unknown) => {
+  const msg = errText(e), code = e instanceof BackendError ? e.code : '';
+  const again = (!code || RETRYABLE.has(code)) && !/try again|wait/i.test(msg);
+  showResult(root, 'push', 'HOLD ON', '', again ? `${msg}<b class="rs-again">Please try again.</b>` : msg);
+};
 /**
  * Check the chips before anything moves: a bet the player cannot cover never starts the reels or the wheel, and
  * the message says where to get more. (The contract would refuse it anyway, but only after the animation ran.)
@@ -1137,7 +1143,7 @@ function commission(root: Root, close: () => void) {
     pane.querySelectorAll('input, select').forEach(i => i.addEventListener('input', check)); check();
     $(pane, '#cf').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const d = draft(), p = campaignProblem(d); if (p) { oops(root, new BackendError('bad_args', p)); return; }
+      const d = draft(), p = campaignProblem(d); if (p) { oops(root, new BackendError('bad_campaign', p)); return; }
       // the Father reads it: a short moment that makes the approval visible
       const veil = document.createElement('div'); veil.className = 'cm-veil';
       veil.innerHTML = `<div class="ch-face"><div class="spr idle" style="${spriteCss('m_monk', 'idle_down', 4)}"></div></div><b>FATHER NAKAMOTO</b><span>is reading your request&hellip;</span><i class="mk-spin"></i>`;

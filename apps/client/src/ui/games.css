@@ -94,6 +94,7 @@
 .gm-res .rs-a { position: relative; font-family: var(--f-cap); font-weight: 700; font-size: clamp(18px, 6vh, 30px); letter-spacing: .06em; color: #fff; text-shadow: 0 2px 0 #000, 0 0 10px rgba(255,229,138,.6); animation: rs-pop .5s .15s both; }
 .gm-res.lose .rs-a { color: #ff8a9a; text-shadow: 0 2px 0 #000; }
 .gm-res .rs-s { position: relative; font-size: 12px; color: rgba(244,234,213,.85); animation: rs-pop .5s .25s both; }
+.gm-res .rs-again { display: block; margin-top: 8px; font-family: var(--f-cap); font-size: 11px; letter-spacing: .12em; color: #ffe58a; }
 .gm-res .rs-tap { position: relative; margin-top: 10px; font-family: var(--f-cap); font-size: 7px; letter-spacing: .2em; color: rgba(244,234,213,.5); }
 .gm-res .coin-p { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff1b0, #f5c542 50%, #a8751f); box-shadow: 0 0 0 1px #6b4a10;
   animation: coinfly var(--d, 1.2s) cubic-bezier(.2,.7,.4,1) both; }
