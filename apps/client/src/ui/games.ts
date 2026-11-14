@@ -540,6 +540,52 @@ function harmony(root: Root, close: () => void, back?: () => void) {
 }
 
 // ---------------------------------------------------------------------------------------------- CASHIER (exchange, leaderboard, my bets)
+/** copy text; falls back to a hidden textarea where the async clipboard is missing (plain-http LAN, old WebViews) */
+async function copyText(t: string): Promise<boolean> {
+  try { await navigator.clipboard.writeText(t); return true; } catch { /* fall back */ }
+  const ta = document.createElement('textarea'); ta.value = t; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;opacity:0;left:-9999px';
+  document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, t.length);
+  let ok = false; try { ok = document.execCommand('copy'); } catch { /* */ } ta.remove(); return ok;
+}
+/** FUND WALLET: the player's own NEAR account, a COPY button, and a live check that shows the NEAR landing */
+async function fundWallet(root: Root, refresh: () => void) {
+  const gm = root.querySelector('.gm'); if (!gm || gm.querySelector('.fw')) return;
+  const el = document.createElement('div'); el.className = 'fw'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Fund your wallet');
+  el.innerHTML = `<div class="fw-card">
+      <h3>FUND YOUR WALLET</h3>
+      <p>Send <b>testnet NEAR</b> to your game wallet from any NEAR testnet wallet. It shows up here in a few seconds; then tap <b>BUY CHIPS</b>.</p>
+      <div class="fw-addr" id="fw-addr">Opening your wallet...</div>
+      <div class="fw-row"><button class="g-key" data-f="copy">COPY ADDRESS</button><button class="g-key dark" data-f="done">DONE</button></div>
+      <div class="fw-st" id="fw-st" aria-live="polite">WALLET ${store.eco.near.toFixed(2)} NEAR &middot; watching for deposits...</div>
+      <small class="fw-warn">Testnet only. Do not send mainnet NEAR to this address.</small></div>`;
+  gm.appendChild(el);
+  let id = '', poll = 0;
+  const done = () => { clearInterval(poll); el.remove(); };
+  el.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const f = (e.target as HTMLElement).closest<HTMLElement>('[data-f]')?.dataset.f;
+    if (f === 'done' || e.target === el) done();
+    if (f === 'copy' && id) {
+      const b = el.querySelector<HTMLElement>('[data-f="copy"]')!;
+      if (await copyText(id)) { b.textContent = 'COPIED!'; audio.play('hit', 0.3); setTimeout(() => { if (b.isConnected) b.textContent = 'COPY ADDRESS'; }, 1600); }
+      else { const r = document.createRange(); r.selectNodeContents(el.querySelector('#fw-addr')!); const s = getSelection(); s?.removeAllRanges(); s?.addRange(r); b.textContent = 'SELECTED: COPY IT'; }
+    }
+  });
+  try { id = (await backend.wallet!()).accountId; el.querySelector('#fw-addr')!.textContent = id; }
+  catch (e) { el.remove(); oops(root, e); return; }
+  if (!el.isConnected) return;                                         // closed while the wallet was opening
+  const st = el.querySelector<HTMLElement>('#fw-st')!, start = store.eco.near;
+  let busy = false;
+  poll = window.setInterval(async () => {
+    if (!el.isConnected) { clearInterval(poll); return; }
+    if (busy) return; busy = true;
+    try {
+      await backend.sync?.(); refresh();
+      const got = store.eco.near - start;
+      st.innerHTML = got > 0.004 ? `<b class="pos">RECEIVED +${got.toFixed(2)} NEAR</b> &middot; wallet ${store.eco.near.toFixed(2)} NEAR` : `WALLET ${store.eco.near.toFixed(2)} NEAR &middot; watching for deposits...`;
+    } catch { /* keep watching */ } finally { busy = false; }
+  }, 4000);
+}
 const GAME_NAME: Record<string, string> = { slots: 'SLOTS', coinflip: 'COIN FLIP', dice: 'DICE', roulette: 'ROULETTE', wheel: 'WHEEL', harmony: 'HARMONY', blackjack: 'BLACKJACK' };
 const ago = (t: number) => { const s = Math.max(1, Math.round((Date.now() - t) / 1000)); return s < 60 ? `${s}s` : s < 3600 ? `${Math.round(s / 60)}m` : s < 86400 ? `${Math.round(s / 3600)}h` : `${Math.round(s / 86400)}d`; };
 function cashier(root: Root, close: () => void) {
@@ -554,11 +600,13 @@ function cashier(root: Root, close: () => void) {
         ? '<button class="g-key" data-a="dhalf">0.25 NEAR</button><button class="g-key" data-a="dall">ALL MY NEAR</button>'
         : '<button class="g-key" data-a="d1">1 NEAR</button><button class="g-key" data-a="d5">5 NEAR</button>'}</div></div>
       <div class="cs-col"><h4>CASH OUT</h4><div class="cs-row"><button class="g-key dark" data-a="w">${CHIPS_PER_NEAR} CHIPS</button><button class="g-key dark" data-a="wall">ALL CHIPS</button></div></div>
-      <button class="g-go wide gold" data-a="faucet" style="grid-column:1/-1;justify-self:center"><span>GET FREE TEST NEAR</span></button></div>`;
+      <div class="cs-bottom">${backend.mode === 'chain' && backend.wallet ? '<button class="g-go wide" data-a="fund"><span>FUND WALLET</span></button>' : ''}<button class="g-go wide gold" data-a="faucet"><span>GET FREE TEST NEAR</span></button></div></div>`;
     const show = () => { $(root, '#near').textContent = store.eco.near.toFixed(2); $(root, '#chp').textContent = fmt(store.eco.chips); setBal(root); };
     show();
     $$(pane, '[data-a]').forEach(b => b.addEventListener('click', async () => {
-      const a = b.dataset.a!; b.classList.add('pending'); (b as HTMLButtonElement).disabled = true; hideResult(root);
+      const a = b.dataset.a!;
+      if (a === 'fund') { fundWallet(root, show); return; }
+      b.classList.add('pending'); (b as HTMLButtonElement).disabled = true; hideResult(root);
       try {
         if (a === 'd1' || a === 'd5' || a === 'dhalf' || a === 'dall') {
           // chain: the wallet also pays gas and keeps a small reserve, so ALL leaves 0.01 NEAR aside
@@ -1447,6 +1495,11 @@ export function openSettings(m: HTMLElement, close: () => void, act: SettingsAct
   m.addEventListener('pointerdown', (e) => { if (e.target === m) close(); }, { once: true });
   const get = (k: string, d = '1') => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
   const set = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* */ } };
+  let walletId = '';
+  const shortId = (id: string) => (id.length > 20 ? `${id.slice(0, 6)}...${id.slice(-6)}` : id);
+  if (backend.mode === 'chain' && backend.wallet) void backend.wallet().then(w => {
+    walletId = w.accountId; const s = root.querySelector('#st-addr'); if (s) s.textContent = shortId(walletId);
+  }).catch(() => { const s = root.querySelector('#st-addr'); if (s) s.textContent = 'no wallet yet'; });
   const render = () => {
     const pad = !document.getElementById('controls')?.classList.contains('hidden');
     const b = blessingOf(store.eco.faith), p = store.profile;
@@ -1465,6 +1518,7 @@ export function openSettings(m: HTMLElement, close: () => void, act: SettingsAct
           <div class="cs-row"><button class="g-key dark" data-a="tc">CASINO TOUR</button><button class="g-key dark" data-a="th">CHURCH TOUR</button></div>
           <button class="g-key dark" data-a="skip">SKIP CURRENT TOUR</button></div>
         <div class="st-sec"><h4>ACCOUNT</h4>
+          ${backend.mode === 'chain' && backend.wallet ? `<div class="st-addr" title="Your NEAR testnet wallet"><span id="st-addr">${walletId ? shortId(walletId) : '...'}</span><button class="g-key" data-a="copyaddr" aria-label="Copy wallet address">COPY</button></div>` : ''}
           <button class="g-key dark" data-a="key" ${backend.mode === 'mock' ? 'disabled' : ''}>EXPORT MY KEY</button>
           ${backend.signOut ? `<button class="g-key danger" data-a="signout">${backend.linkedAccount?.() ? 'SIGN OUT' : 'SIGN OUT (UNSECURED)'}</button>` : '<button class="g-key danger" data-a="reset">NEW CHARACTER</button>'}
           <div class="st-out" id="out"></div></div>
@@ -1486,6 +1540,12 @@ export function openSettings(m: HTMLElement, close: () => void, act: SettingsAct
       if (a === 'lore') { close(); showBackstory(); return; }
       if (a === 'how') { shell(root, close, 'plaza' as any, 'HOW TO PLAY', `<div class="st">${howToHtml()}<button class="g-key dark" id="bk" style="align-self:center;min-width:160px">BACK TO SETTINGS</button></div>`); playHowTo(root); $(root, '#bk').addEventListener('click', render); }
       if (a === 'tc') { close(); act.replay('casino'); } if (a === 'th') { close(); act.replay('church'); } if (a === 'skip') { close(); act.skip(); }
+      if (a === 'copyaddr') {
+        if (!walletId) return;
+        const ok = await copyText(walletId);
+        btn.textContent = ok ? 'COPIED!' : 'FAILED'; if (!ok) $(root, '#out').textContent = walletId;
+        setTimeout(() => { if (btn.isConnected) btn.textContent = 'COPY'; }, 1600);
+      }
       if (a === 'key') {
         const k: string = (window as any).cncExportKey?.() ?? '';
         const out = $(root, '#out');

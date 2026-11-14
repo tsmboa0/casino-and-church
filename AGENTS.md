@@ -75,7 +75,7 @@ seconds. The dealer commits to its seed before your bet (commit-reveal), so outc
 
 | Place | What to do |
 |---|---|
-| `cashier` | free test NEAR, deposit, cash out, bet history with explorer links |
+| `cashier` | free test NEAR, FUND WALLET (your account address with a copy button, for sending your own testnet NEAR), deposit, cash out, bet history with explorer links |
 | `slots-west`, `slots-east`, `coinflip`, `dice`, `roulette`, `blackjack` | pick a bet, then SPIN / FLIP / ROLL / DEAL |
 | `wheel` | Wheel of Fortune, free to spin once LUCK reaches 100 |
 | `market` | **BTC Exchange**: call BTC UP or DOWN for a one-minute round (1, 2, 5 or 10 chips, pays 1.9x). The lock and close prices come from the **OutLayer TEE oracle** inside the contract. The result arrives about 2 minutes after betting. The chart is TradingView's live BTC/USDT. |

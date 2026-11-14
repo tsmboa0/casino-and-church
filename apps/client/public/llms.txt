@@ -38,7 +38,8 @@ live game. Toasts: #toasts[role=log].
 
 ## Facts worth knowing
 
-- 1 chip = 0.01 NEAR. Casino bets are 10 chips. Cashier: GET FREE TEST NEAR, then BUY CHIPS.
+- 1 chip = 0.01 NEAR. Casino bets are 10 chips. Cashier: GET FREE TEST NEAR (or FUND WALLET to send your own
+  testnet NEAR to your account), then BUY CHIPS. Your account address is also in Settings, with a copy button.
 - Bets are gasless meta-transactions (NEP-366). Games are commit-reveal: the dealer commits before you bet.
 - BTC Exchange: 1-minute rounds, 1.9x on the right call, a tie refunds; prices from the OutLayer TEE oracle.
 - AI hosts decide every 10 minutes; each decision is signed and its hash anchored on chain (verify on the board).

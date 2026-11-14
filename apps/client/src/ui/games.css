@@ -241,6 +241,18 @@
 .cs-col { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 8px; background: rgba(0,0,0,.3); box-shadow: inset 0 0 0 2px rgba(255,229,138,.18); }
 .cs-col h4 { margin: 0; font-family: var(--f-cap); font-size: 9px; letter-spacing: .16em; color: #ffe58a; text-align: center; }
 .cs-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cs-bottom { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.fw { position: absolute; inset: 0; z-index: 25; display: grid; place-items: center; padding: 12px; background: rgba(8,6,14,.72); }
+.fw-card { width: min(440px, 100%); max-height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 8px; text-align: center;
+  background: linear-gradient(180deg, #2a3a2e, #142019); box-shadow: inset 0 0 0 3px #b27a18, 0 0 0 2px var(--ink), inset 0 0 0 5px var(--ink), 0 10px 30px rgba(0,0,0,.6); }
+.fw-card h3 { margin: 0; font-family: var(--f-cap); font-size: 12px; letter-spacing: .16em; color: #ffe58a; }
+.fw-card p { margin: 0; font-size: 14px; line-height: 1.35; color: #f3ead2; }
+.fw-addr { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.4; word-break: break-all; user-select: all; -webkit-user-select: all;
+  color: #8af0a4; padding: 10px; border-radius: 6px; background: rgba(0,0,0,.5); box-shadow: inset 0 0 0 1px rgba(138,240,164,.35); }
+.fw-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.fw-st { font-family: var(--f-cap); font-size: 9px; letter-spacing: .08em; color: #ffe58a; }
+.fw-st .pos { color: #8af0a4; }
+.fw-warn { font-size: 11px; color: #f3ead2; opacity: .7; }
 
 /* =====================================================================================  CHURCH: offering, candles, quests, altar  */
 .of { display: flex; gap: 16px; align-items: center; }
@@ -353,6 +365,9 @@
 .tg i::after { content: ''; position: absolute; left: 3px; top: 3px; width: 12px; height: 12px; border-radius: 50%; background: #8a7aa8; transition: transform .15s, background .15s; }
 .tg.on i { background: #1f8a4c; } .tg.on i::after { transform: translateX(16px); background: #fff; }
 .g-key.danger { color: #fff; background: linear-gradient(180deg, #ff6a6a, #c4202e 55%, #8a0f20); box-shadow: 0 3px 0 #4a0810, 0 0 0 2px var(--ink); }
+.st-addr { display: flex; align-items: center; gap: 6px; padding: 4px 4px 4px 8px; background: rgba(0,0,0,.45); box-shadow: inset 0 0 0 1px rgba(138,240,164,.35); }
+.st-addr span { flex: 1; min-width: 0; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: #8af0a4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-addr .g-key { flex: none; padding-left: 10px; padding-right: 10px; min-width: 0; }
 .st-out { min-height: 14px; font-size: 10px; text-align: center; color: #ffd27a; word-break: break-all; }
 .st-credit { margin: 0; font-size: 9px; opacity: .5; text-align: center; }
 @media (max-width: 700px) { .st-grid { grid-template-columns: 1fr 1fr; } }
