@@ -6,6 +6,7 @@
 
 ![Play now](https://img.shields.io/badge/PLAY-casino--and--church.vercel.app-e84393?style=for-the-badge)
 ![NEAR testnet](https://img.shields.io/badge/NEAR-testnet-00ec97?style=for-the-badge&logo=near&logoColor=white)
+[![Contract](https://img.shields.io/badge/CONTRACT-realm.casinonchurch.testnet-1f2937?style=for-the-badge&logo=near&logoColor=white)](https://testnet.nearblocks.io/address/realm.casinonchurch.testnet)
 ![For AI judges](https://img.shields.io/badge/AI%20judges-read%20AGENT__README.md-f5c542?style=for-the-badge)
 
 ![Track](https://img.shields.io/badge/NEAR%20Hackathon%202026-Track%2009%3A%20Games%20With%20Real%20Economies-6c5ce7)
@@ -349,6 +350,16 @@ pnpm test        # shared + server + simulation vectors + contract tests + both 
 Best in **landscape with sound on**. Create an account with a username and password, pick a character, and walk. Welcome chips arrive on chain in a few seconds.
 
 **On a phone, install it as an app.** The game is a PWA: add it to your home screen (Safari: **Share → Add to Home Screen**; Chrome/Android: **⋮ → Add to Home screen** or **Install app**). It then opens full screen and in landscape, with no browser bars, like a native game.
+
+**On chain**
+
+| | |
+|---|---|
+| Game contract | [`realm.casinonchurch.testnet`](https://testnet.nearblocks.io/address/realm.casinonchurch.testnet) (NEAR testnet): chips, every game, the Church, campaigns, the BTC market, deeds and the AI hosts' anchors |
+| BTC price oracle | [`outlayer.testnet`](https://testnet.nearblocks.io/address/outlayer.testnet), called by the game contract itself (OutLayer TEE price oracle) |
+| API health | [`/healthz`](https://server-production-d070a910.up.railway.app/healthz): dealer, relayer, AI hosts and the BTC market keeper |
+
+Every result card in the game links to its transaction on NearBlocks.
 
 ---
 
